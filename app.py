@@ -288,7 +288,13 @@ IDX_TICKERS = [
     # Media & Others
     "SCMA.JK","MNCN.JK","LINK.JK","TBIG.JK","TOWR.JK",
     # Misc
-    "AKRA.JK","INDF.JK","JPFA.JK","MAIN.JK","ACES.JK","MAPI.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK",
+    "AKRA.JK","INDF.JK","JPFA.JK","MAIN.JK","ACES.JK","MAPI.JK","BIPI.JK",
+    "TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK","FREN.JK","ARTO.JK",
+    "ADMF.JK","APLN.JK","BSSR.JK","BSPH.JK","BTEK.JK","BIPI.JK","TPIA.JK",
+    "DATA.JK","INET.JK","WIFI.JK","PANI.JK","FREN.JK","ARTO.JK","ADMF.JK",
+    "APLN.JK","BSSR.JK","BSPH.JK","BTEK.JK","BNBR.JK","DEWA.JK","BULL.JK",
+    "PPRE.JK","SMAA.JK","KIJA.JK","VKTR.JK","ELSA.JK","ENRG.JK","PGAS.JK",
+    "OILS.JK", 
 ]
 
 # ── Core Logic ─────────────────────────────────────────────────────────────────
