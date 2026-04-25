@@ -263,7 +263,7 @@ IDX_TICKERS = list(dict.fromkeys([
     "AKRA.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK",
     "FREN.JK","ARTO.JK","ADMF.JK","APLN.JK","BSSR.JK","BTEK.JK",
     "BNBR.JK","DEWA.JK","BULL.JK","PPRE.JK","SMAA.JK","KIJA.JK",
-    "VKTR.JK","ELSA.JK","OILS.JK",
+    "VKTR.JK","ELSA.JK","OILS.JK","ISAT.JK","MBMA.JK"
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
