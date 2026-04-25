@@ -7,666 +7,610 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 import time
 
-# ── Page config ──────────────────────────────────────────────────────────────
+# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="IDX Stochastic Screener",
+    page_title="IDX Screener",
     page_icon="📈",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
 
-/* Root theme */
 :root {
-    --bg: #0a0e1a;
-    --surface: #111827;
-    --surface2: #1a2235;
-    --accent: #00e5a0;
-    --accent2: #f97316;
-    --accent3: #6366f1;
-    --text: #e2e8f0;
-    --text-muted: #64748b;
-    --border: #1e293b;
-    --danger: #ef4444;
-    --success: #10b981;
+    --bg:      #07090f;
+    --surface: #0e1117;
+    --surf2:   #161b24;
+    --green:   #3ddc84;
+    --orange:  #f0883e;
+    --blue:    #58a6ff;
+    --red:     #f85149;
+    --text:    #e6edf3;
+    --muted:   #7d8590;
+    --border:  #21262d;
+    --gdim:    rgba(61,220,132,0.12);
+    --gbdr:    rgba(61,220,132,0.28);
 }
 
-/* Global */
 html, body, [class*="css"] {
-    font-family: 'Syne', sans-serif;
+    font-family: 'DM Sans', sans-serif !important;
     background-color: var(--bg) !important;
     color: var(--text) !important;
 }
-
-.stApp {
-    background: var(--bg) !important;
-    background-image:
-        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0,229,160,0.08) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 90% 10%, rgba(99,102,241,0.06) 0%, transparent 60%);
-}
-
-/* Hide default streamlit chrome */
+.stApp { background: var(--bg) !important; }
 #MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 2rem 2rem 4rem; max-width: 1400px; }
 
-/* ── Hero header ── */
-.hero {
-    text-align: center;
-    padding: 3rem 0 2rem;
+/* ── Container — tight on mobile ── */
+.block-container {
+    padding: 1rem 0.75rem 4rem !important;
+    max-width: 680px !important;
 }
-.hero-tag {
-    display: inline-block;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.25em;
+
+/* ── Hero ── */
+.hero {
+    padding: 1.8rem 0 1.4rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.4rem;
+}
+.hero-eye {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--accent);
-    border: 1px solid rgba(0,229,160,0.3);
-    padding: 4px 14px;
-    border-radius: 20px;
-    margin-bottom: 1.2rem;
-    background: rgba(0,229,160,0.05);
+    color: var(--green);
+    margin-bottom: 0.5rem;
 }
 .hero-title {
-    font-size: clamp(2.2rem, 5vw, 3.8rem);
-    font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: -0.03em;
-    background: linear-gradient(135deg, #ffffff 0%, var(--accent) 60%, var(--accent3) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 0.8rem;
+    font-size: clamp(1.75rem, 7vw, 2.8rem);
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--text);
+    margin-bottom: 0.35rem;
 }
-.hero-sub {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    letter-spacing: 0.05em;
+.hero-title em { color: var(--green); font-style: normal; }
+.hero-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    line-height: 1.5;
 }
 
-/* ── Stats bar ── */
-.stats-bar {
-    display: flex;
+/* ── Stats grid — 2×2 on mobile, 4×1 on wider ── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 1px;
     background: var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
-    margin: 1.5rem 0;
+    margin-bottom: 1.1rem;
 }
-.stat-item {
-    flex: 1;
+@media (min-width: 520px) {
+    .stats-grid { grid-template-columns: repeat(4, 1fr); }
+}
+.stat-cell {
     background: var(--surface);
-    padding: 1rem 1.2rem;
+    padding: 0.8rem 0.6rem;
     text-align: center;
 }
-.stat-value {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.6rem;
+.stat-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.05rem;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--green);
     line-height: 1;
 }
-.stat-label {
-    font-size: 0.7rem;
-    letter-spacing: 0.1em;
+.stat-lbl {
+    font-size: 0.6rem;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
-    color: var(--text-muted);
-    margin-top: 4px;
+    color: var(--muted);
+    margin-top: 3px;
+}
+
+/* ── Info pill ── */
+.info-pill {
+    background: rgba(88,166,255,0.07);
+    border: 1px solid rgba(88,166,255,0.18);
+    border-radius: 7px;
+    padding: 0.75rem 0.9rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.67rem;
+    color: #8ab4f8;
+    line-height: 1.8;
+    margin-bottom: 1.1rem;
+    word-break: break-word;
 }
 
 /* ── Run button ── */
 .stButton > button {
-    width: 100%;
-    background: linear-gradient(135deg, var(--accent) 0%, #00b87a 100%) !important;
-    color: #0a0e1a !important;
-    font-family: 'Space Mono', monospace !important;
-    font-size: 0.85rem !important;
+    width: 100% !important;
+    background: var(--green) !important;
+    color: #07090f !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.78rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.12em !important;
+    letter-spacing: 0.1em !important;
     text-transform: uppercase !important;
     border: none !important;
-    border-radius: 10px !important;
-    padding: 0.85rem 2rem !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease !important;
-    box-shadow: 0 0 30px rgba(0,229,160,0.25) !important;
+    border-radius: 7px !important;
+    padding: 0.8rem !important;
+    transition: opacity 0.15s !important;
+    margin-bottom: 0.8rem !important;
 }
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 0 50px rgba(0,229,160,0.4) !important;
-}
+.stButton > button:hover { opacity: 0.82 !important; }
 
 /* ── Signal card ── */
-.signal-card {
+.sig-card {
     background: var(--surface);
-    border: 1px solid rgba(0,229,160,0.2);
-    border-left: 3px solid var(--accent);
-    border-radius: 12px;
-    padding: 1.2rem 1.4rem;
-    margin-bottom: 0.6rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-    overflow: hidden;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.45rem;
 }
-.signal-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(135deg, rgba(0,229,160,0.04) 0%, transparent 60%);
-    pointer-events: none;
-}
-.signal-card:hover {
-    border-color: var(--accent);
-    box-shadow: 0 0 20px rgba(0,229,160,0.1);
-    transform: translateX(4px);
-}
-.card-ticker {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.05rem;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: 0.05em;
-}
-.card-badge {
-    display: inline-block;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    background: rgba(0,229,160,0.15);
-    color: var(--accent);
-    border: 1px solid rgba(0,229,160,0.3);
-    padding: 2px 8px;
-    border-radius: 20px;
-    margin-left: 8px;
-    vertical-align: middle;
-}
-.card-values {
+.sig-top {
     display: flex;
-    gap: 1.5rem;
-    margin-top: 0.6rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 0.55rem;
 }
-.val-item { }
-.val-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-}
-.val-number {
-    font-family: 'Space Mono', monospace;
+.sig-ticker {
+    font-family: 'IBM Plex Mono', monospace;
     font-size: 1rem;
     font-weight: 700;
-    color: var(--accent);
+    color: #fff;
+    letter-spacing: 0.04em;
 }
-
-/* ── Empty state ── */
-.empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: var(--text-muted);
+.badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.55rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
 }
-.empty-icon { font-size: 3rem; margin-bottom: 1rem; }
-.empty-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; }
-.empty-sub { font-size: 0.82rem; font-family: 'Space Mono', monospace; }
-
-/* ── Progress ── */
-.stProgress > div > div { background: var(--accent) !important; }
-
-/* ── Divider ── */
-hr { border-color: var(--border) !important; margin: 1.5rem 0 !important; }
-
-/* ── Expander / selectbox tweaks ── */
-.stSelectbox > div > div {
-    background: var(--surface) !important;
-    border-color: var(--border) !important;
-    color: var(--text) !important;
+.b-green { background: var(--gdim); color: var(--green); border: 1px solid var(--gbdr); }
+.b-orange { background: rgba(240,136,62,0.12); color: var(--orange); border: 1px solid rgba(240,136,62,0.28); }
+.sig-vals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
 }
-
-/* ── Sidebar ── */
-.css-1d391kg, [data-testid="stSidebar"] {
-    background: var(--surface) !important;
+.sv-lbl {
+    font-size: 0.58rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
 }
-
-/* ── Info box ── */
-.info-box {
-    background: rgba(99,102,241,0.08);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 10px;
-    padding: 1rem 1.2rem;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.75rem;
-    color: #a5b4fc;
-    line-height: 1.6;
+.sv-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--green);
 }
 
 /* ── Section label ── */
-.section-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.2em;
+.sec-lbl {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 0.8rem;
-    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
 }
 
-/* ── Scrollable results container ── */
-.results-scroll {
-    max-height: 600px;
-    overflow-y: auto;
-    padding-right: 4px;
+/* ── Download button ── */
+.stDownloadButton > button {
+    background: var(--surf2) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.72rem !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+    margin-bottom: 0.7rem !important;
 }
+
+/* ── Metric ── */
+[data-testid="stMetricValue"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.95rem !important;
+}
+[data-testid="stMetricLabel"] { font-size: 0.72rem !important; }
+
+/* ── Empty state ── */
+.empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--muted);
+}
+.empty-icon { font-size: 2.2rem; margin-bottom: 0.7rem; }
+.empty-title { font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 0.3rem; }
+.empty-sub { font-size: 0.72rem; font-family: 'IBM Plex Mono', monospace; line-height: 1.6; }
+
+/* ── Misc ── */
+.stProgress > div > div { background: var(--green) !important; }
+hr { border-color: var(--border) !important; margin: 0.9rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Ticker Universe ────────────────────────────────────────────────────────────
-IDX_TICKERS = [
-    # Banks & Finance
+# ── Ticker universe (deduped) ─────────────────────────────────────────────────
+IDX_TICKERS = list(dict.fromkeys([
     "BBCA.JK","BBRI.JK","BMRI.JK","BBNI.JK","BRIS.JK","BTPS.JK","BJTM.JK",
     "BNGA.JK","BDMN.JK","BNII.JK","MEGA.JK","PNBN.JK","NISP.JK","BBKP.JK",
-    # Telco & Tech
     "TLKM.JK","EXCL.JK","ISAT.JK","GOTO.JK","BUKA.JK","EMTK.JK","MTEL.JK",
-    # Consumer & Retail
     "UNVR.JK","ICBP.JK","INDF.JK","MYOR.JK","KLBF.JK","SIDO.JK","ULTJ.JK",
     "HMSP.JK","GGRM.JK","CPIN.JK","JPFA.JK","MAIN.JK","ACES.JK","MAPI.JK",
     "RALS.JK","LPPF.JK","ERAA.JK",
-    # Energy & Mining
     "ADRO.JK","PTBA.JK","ITMG.JK","HRUM.JK","BYAN.JK","DSSA.JK","INCO.JK",
     "ANTM.JK","MDKA.JK","TINS.JK","MEDC.JK","ENRG.JK","PGAS.JK",
-    # Property & Construction
     "BSDE.JK","SMRA.JK","CTRA.JK","PWON.JK","LPKR.JK","WIKA.JK","PTPP.JK",
     "WSKT.JK","ADHI.JK",
-    # Industrial & Transport
     "ASII.JK","AALI.JK","LSIP.JK","SIMP.JK","UNTR.JK","SMGR.JK","INTP.JK",
     "JSMR.JK","GIAA.JK","BIRD.JK","MIKA.JK","HEAL.JK","SILO.JK",
-    # Media & Others
     "SCMA.JK","MNCN.JK","LINK.JK","TBIG.JK","TOWR.JK",
-    # Misc
-    "AKRA.JK","INDF.JK","JPFA.JK","MAIN.JK","ACES.JK","MAPI.JK","BIPI.JK",
-    "TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK","FREN.JK","ARTO.JK",
-    "ADMF.JK","APLN.JK","BSSR.JK","BSPH.JK","BTEK.JK","BIPI.JK","TPIA.JK",
-    "DATA.JK","INET.JK","WIFI.JK","PANI.JK","FREN.JK","ARTO.JK","ADMF.JK",
-    "APLN.JK","BSSR.JK","BSPH.JK","BTEK.JK","BNBR.JK","DEWA.JK","BULL.JK",
-    "PPRE.JK","SMAA.JK","KIJA.JK","VKTR.JK","ELSA.JK","ENRG.JK","PGAS.JK",
-    "OILS.JK", 
-]
+    "AKRA.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK",
+    "FREN.JK","ARTO.JK","ADMF.JK","APLN.JK","BSSR.JK","BTEK.JK",
+    "BNBR.JK","DEWA.JK","BULL.JK","PPRE.JK","SMAA.JK","KIJA.JK",
+    "VKTR.JK","ELSA.JK","OILS.JK",
+]))
 
-# ── Core Logic ─────────────────────────────────────────────────────────────────
+# ── Data fetch ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_data(ticker: str):
     try:
-        df = yf.download(ticker, period="3mo", interval="1d", progress=False, auto_adjust=True)
-        if df.empty or len(df) < 20:
+        df = yf.download(ticker, period="6mo", interval="1d",
+                         progress=False, auto_adjust=True)
+        if df.empty or len(df) < 30:
             return None
-        # Flatten MultiIndex columns if present
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df
     except Exception:
         return None
 
+# ── Stochastic Slow ───────────────────────────────────────────────────────────
+def compute_stochastic(df, fast_k=10, slow_k=5, slow_d=5):
+    lo = df["Low"].rolling(fast_k).min()
+    hi = df["High"].rolling(fast_k).max()
+    fk = 100 * ((df["Close"] - lo) / (hi - lo).replace(0, np.nan))
+    sk = fk.rolling(slow_k).mean()
+    sd = sk.rolling(slow_d).mean()
+    return sk, sd
 
-def compute_stochastic(df: pd.DataFrame, k_period=14, d_period=3):
-    low_min  = df["Low"].rolling(k_period).min()
-    high_max = df["High"].rolling(k_period).max()
-    denom = (high_max - low_min).replace(0, np.nan)
-    k = 100 * ((df["Close"] - low_min) / denom)
-    d = k.rolling(d_period).mean()
-    return k, d
+# ── Parabolic SAR ─────────────────────────────────────────────────────────────
+def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
+    hi    = df["High"].values
+    lo    = df["Low"].values
+    n     = len(lo)
+    sar   = np.full(n, np.nan)
+    trend = np.ones(n, dtype=int)   # 1=bull, -1=bear
+    ep    = np.full(n, np.nan)
+    af    = np.full(n, af0)
 
+    sar[0]   = lo[0]
+    ep[0]    = hi[0]
 
-def compute_ema(df: pd.DataFrame, period=50):
-    return df["Close"].ewm(span=period, adjust=False).mean()
+    for i in range(1, n):
+        ps, pe, pa, pt = sar[i-1], ep[i-1], af[i-1], trend[i-1]
+        if pt == 1:
+            ns = ps + pa * (pe - ps)
+            ns = min(ns, lo[i-1], lo[max(0,i-2)])
+            if lo[i] < ns:                          # reversal → bear
+                trend[i], sar[i], ep[i], af[i] = -1, pe, lo[i], af0
+            else:
+                trend[i] = 1
+                sar[i]   = ns
+                if hi[i] > pe:
+                    ep[i] = hi[i]; af[i] = min(pa + af_step, af_max)
+                else:
+                    ep[i] = pe; af[i] = pa
+        else:
+            ns = ps + pa * (pe - ps)
+            ns = max(ns, hi[i-1], hi[max(0,i-2)])
+            if hi[i] > ns:                          # reversal → bull
+                trend[i], sar[i], ep[i], af[i] = 1, pe, hi[i], af0
+            else:
+                trend[i] = -1
+                sar[i]   = ns
+                if lo[i] < pe:
+                    ep[i] = lo[i]; af[i] = min(pa + af_step, af_max)
+                else:
+                    ep[i] = pe; af[i] = pa
 
+    return (pd.Series(sar,   index=df.index),
+            pd.Series(trend, index=df.index))
 
+# ── Signal check ──────────────────────────────────────────────────────────────
 def check_signal(ticker: str):
     df = fetch_data(ticker)
     if df is None:
         return None
 
-    k, d = compute_stochastic(df)
-    ema50 = compute_ema(df, period=50)
+    sk, sd        = compute_stochastic(df)
+    sar, trend    = compute_psar(df)
 
-    if k.isna().iloc[-1] or d.isna().iloc[-1] or ema50.isna().iloc[-1]:
+    if any(s.isna().iloc[-1] for s in [sk, sd, sar]):
         return None
 
-    last_close = float(df["Close"].iloc[-1])
-    last_ema   = float(ema50.iloc[-1])
+    crossover = (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])
+    oversold  = sk.iloc[-1] < 20
+    sar_bull  = trend.iloc[-1] == 1
 
-    # Golden cross in oversold territory AND price above EMA50 (uptrend filter)
-    crossover    = (k.iloc[-2] < d.iloc[-2]) and (k.iloc[-1] > d.iloc[-1])
-    oversold     = k.iloc[-1] < 20
-    above_trend  = last_close > last_ema
-
-    if crossover and oversold and above_trend:
+    if crossover and oversold and sar_bull:
+        close     = float(df["Close"].iloc[-1])
+        sar_val   = float(sar.iloc[-1])
+        prev      = float(df["Close"].iloc[-2])
         return {
-            "ticker":  ticker,
-            "%K":      round(float(k.iloc[-1]), 2),
-            "%D":      round(float(d.iloc[-1]), 2),
-            "ema50":   round(last_ema, 2),
-            "close":   round(last_close, 2),
-            "signal":  "Golden Cross ✦ Oversold ✦ Above EMA50",
-            "df":      df,
-            "k":       k,
-            "d":       d,
-            "ema50_series": ema50,
+            "ticker":   ticker,
+            "%K":       round(float(sk.iloc[-1]), 2),
+            "%D":       round(float(sd.iloc[-1]), 2),
+            "sar":      round(sar_val, 2),
+            "close":    round(close, 2),
+            "chg":      round((close - prev) / prev * 100, 2),
+            "sar_pct":  round((close - sar_val) / sar_val * 100, 2),
+            "signal":   "Stoch Cross + Oversold + PSAR Bull",
+            "df":       df,
+            "sk":       sk,
+            "sd":       sd,
+            "sar_s":    sar,
+            "trend":    trend,
         }
     return None
 
-
 # ── Chart ─────────────────────────────────────────────────────────────────────
-def build_chart(result: dict) -> go.Figure:
-    df = result["df"]
-    k  = result["k"]
-    d  = result["d"]
-    ticker = result["ticker"]
+def build_chart(r):
+    df    = r["df"]
+    sk    = r["sk"]
+    sd    = r["sd"]
+    sar   = r["sar_s"]
+    trend = r["trend"]
+    name  = r["ticker"].replace(".JK", "")
 
-    fig = make_subplots(
-        rows=2, cols=1,
-        shared_xaxes=True,
-        row_heights=[0.6, 0.4],
-        vertical_spacing=0.03,
-    )
+    bull_sar = sar.where(trend ==  1)
+    bear_sar = sar.where(trend == -1)
 
-    # Candlestick
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.60, 0.40], vertical_spacing=0.02)
+
+    # Candles
     fig.add_trace(go.Candlestick(
-        x=df.index,
-        open=df["Open"], high=df["High"],
-        low=df["Low"],   close=df["Close"],
-        increasing_line_color="#00e5a0",
-        decreasing_line_color="#ef4444",
-        increasing_fillcolor="rgba(0,229,160,0.7)",
-        decreasing_fillcolor="rgba(239,68,68,0.7)",
-        name="Price",
-        showlegend=False,
+        x=df.index, open=df["Open"], high=df["High"],
+        low=df["Low"], close=df["Close"],
+        increasing_line_color="#3ddc84", decreasing_line_color="#f85149",
+        increasing_fillcolor="rgba(61,220,132,0.75)",
+        decreasing_fillcolor="rgba(248,81,73,0.75)",
+        name="Price", showlegend=False,
     ), row=1, col=1)
 
-    # EMA 50
-    ema50 = result["ema50_series"]
+    # PSAR dots
     fig.add_trace(go.Scatter(
-        x=ema50.index, y=ema50.values,
-        mode="lines",
-        line=dict(color="#6366f1", width=1.8, dash="dot"),
-        name="EMA 50",
+        x=bull_sar.index, y=bull_sar.values, mode="markers",
+        marker=dict(size=4, color="#3ddc84"), name="PSAR ↑",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=bear_sar.index, y=bear_sar.values, mode="markers",
+        marker=dict(size=4, color="#f85149"), name="PSAR ↓",
     ), row=1, col=1)
 
-    # Stochastic %K
+    # Slow%K / Slow%D
     fig.add_trace(go.Scatter(
-        x=k.index, y=k.values,
-        mode="lines",
-        line=dict(color="#00e5a0", width=1.8),
-        name="%K",
+        x=sk.index, y=sk.values, mode="lines",
+        line=dict(color="#3ddc84", width=1.8), name="Slow%K",
+    ), row=2, col=1)
+    fig.add_trace(go.Scatter(
+        x=sd.index, y=sd.values, mode="lines",
+        line=dict(color="#f0883e", width=1.8, dash="dot"), name="Slow%D",
     ), row=2, col=1)
 
-    # Stochastic %D
-    fig.add_trace(go.Scatter(
-        x=d.index, y=d.values,
-        mode="lines",
-        line=dict(color="#f97316", width=1.8, dash="dot"),
-        name="%D",
-    ), row=2, col=1)
+    # Oversold band & lines
+    fig.add_hrect(y0=0, y1=20, fillcolor="rgba(61,220,132,0.06)",
+                  line_width=0, row=2, col=1)
+    for lvl in [20, 80]:
+        fig.add_hline(y=lvl, line_dash="dash",
+                      line_color="rgba(255,255,255,0.1)", line_width=1,
+                      row=2, col=1)
 
-    # Oversold / overbought zones
-    for level, color in [(20, "rgba(0,229,160,0.08)"), (80, "rgba(239,68,68,0.08)")]:
-        fig.add_hline(y=level, line_dash="dash", line_color="rgba(255,255,255,0.15)",
-                      line_width=1, row=2, col=1)
-
-    # Crossover marker on latest bar
+    # Signal star
     fig.add_trace(go.Scatter(
-        x=[k.index[-1]], y=[k.iloc[-1]],
-        mode="markers",
-        marker=dict(size=10, color="#00e5a0", symbol="star",
+        x=[sk.index[-1]], y=[sk.iloc[-1]], mode="markers",
+        marker=dict(size=11, color="#3ddc84", symbol="star",
                     line=dict(color="#fff", width=1.5)),
-        name="Signal",
-        showlegend=False,
+        name="Signal", showlegend=False,
     ), row=2, col=1)
 
-    # Layout
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(17,24,39,0.6)",
-        font=dict(family="Space Mono, monospace", color="#94a3b8", size=11),
-        margin=dict(l=0, r=0, t=40, b=0),
-        title=dict(
-            text=f"<b>{ticker}</b>  ·  Stochastic Golden Cross",
-            font=dict(color="#e2e8f0", size=14, family="Syne, sans-serif"),
-        ),
-        legend=dict(
-            orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
-            bgcolor="rgba(0,0,0,0)", font=dict(size=10),
-        ),
+        plot_bgcolor="rgba(14,17,23,0.9)",
+        font=dict(family="IBM Plex Mono, monospace", color="#7d8590", size=10),
+        margin=dict(l=0, r=0, t=34, b=0),
+        title=dict(text=f"<b>{name}</b> · Stoch Slow + PSAR",
+                   font=dict(color="#e6edf3", size=13,
+                             family="DM Sans, sans-serif")),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01,
+                    xanchor="right", x=1,
+                    bgcolor="rgba(0,0,0,0)", font=dict(size=9)),
         xaxis_rangeslider_visible=False,
-        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=10)),
-        yaxis2=dict(
-            range=[-5, 105],
-            gridcolor="rgba(255,255,255,0.04)",
-            tickfont=dict(size=10),
-            tickvals=[0, 20, 50, 80, 100],
-        ),
-        height=520,
+        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", tickfont=dict(size=9)),
+        yaxis2=dict(range=[-5, 105], gridcolor="rgba(255,255,255,0.04)",
+                    tickfont=dict(size=9), tickvals=[0,20,50,80,100]),
+        height=440,
     )
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)", showgrid=True)
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)")
     return fig
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def render_hero():
-    st.markdown("""
+# ── UI helpers ────────────────────────────────────────────────────────────────
+def render_hero(n):
+    st.markdown(f"""
     <div class="hero">
-        <div class="hero-tag">IDX · Bursa Efek Indonesia</div>
-        <div class="hero-title">Stochastic<br>Golden Cross</div>
-        <div class="hero-sub">Screener · Daily Close · Yahoo Finance</div>
+        <div class="hero-eye">IDX · Bursa Efek Indonesia</div>
+        <div class="hero-title">IDX <em>Screener</em></div>
+        <div class="hero-meta">
+            Slow Stoch(10/5/5) · Oversold &lt;20 · Parabolic SAR<br>
+            Daily close · {datetime.now().strftime("%d %b %Y")}
+        </div>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-cell">
+            <div class="stat-num">{n}</div>
+            <div class="stat-lbl">Stocks</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-num">10/5/5</div>
+            <div class="stat-lbl">Stoch</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-num">&lt;20</div>
+            <div class="stat-lbl">Oversold</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-num">PSAR</div>
+            <div class="stat-lbl">Trend</div>
+        </div>
+    </div>
+    <div class="info-pill">
+        SIGNAL → Slow%K crosses above Slow%D<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Slow%K &lt; 20 (oversold zone)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Price above Parabolic SAR (bull)<br>
+        DATA &nbsp;&nbsp;→ 6-month daily · cached 1 hr
     </div>
     """, unsafe_allow_html=True)
 
 
-def render_signal_card(r, idx):
-    k_val = r["%K"]
-    d_val = r["%D"]
-    ema_val = r["ema50"]
-    close_val = r["close"]
-    depth = max(0, min(100, (20 - k_val) / 20 * 100))
-    ema_gap = round((close_val - ema_val) / ema_val * 100, 1)
+def render_card(r, idx):
+    k, d = r["%K"], r["%D"]
     st.markdown(f"""
-    <div class="signal-card">
-        <div>
-            <span class="card-ticker">{r["ticker"].replace(".JK","")}</span>
-            <span class="card-badge">⚡ Signal</span>
+    <div class="sig-card">
+        <div class="sig-top">
+            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
+            <div class="badges">
+                <span class="badge b-green">✦ Cross</span>
+                <span class="badge b-green">Oversold</span>
+                <span class="badge b-orange">PSAR ↑</span>
+            </div>
         </div>
-        <div class="card-values">
-            <div class="val-item">
-                <div class="val-label">%K (Fast)</div>
-                <div class="val-number">{k_val}</div>
+        <div class="sig-vals">
+            <div>
+                <div class="sv-lbl">Slow%K</div>
+                <div class="sv-num">{k}</div>
             </div>
-            <div class="val-item">
-                <div class="val-label">%D (Slow)</div>
-                <div class="val-number">{d_val}</div>
+            <div>
+                <div class="sv-lbl">Slow%D</div>
+                <div class="sv-num">{d}</div>
             </div>
-            <div class="val-item">
-                <div class="val-label">Oversold Depth</div>
-                <div class="val-number">{depth:.0f}%</div>
+            <div>
+                <div class="sv-lbl">Close</div>
+                <div class="sv-num">{r["close"]:,}</div>
             </div>
-            <div class="val-item">
-                <div class="val-label">vs EMA50</div>
-                <div class="val-number" style="color:#6366f1">+{ema_gap}%</div>
+            <div>
+                <div class="sv-lbl">vs SAR</div>
+                <div class="sv-num">+{r["sar_pct"]}%</div>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
 
-# ── Main App ──────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    render_hero()
-
-    # ── Controls row
-    col_btn, col_upload = st.columns([2, 1])
-
-    with col_upload:
-        uploaded = st.file_uploader(
-            "Upload ticker list (.txt, one per line)",
-            type=["txt"],
-            label_visibility="collapsed",
-        )
-
-    with col_btn:
-        run = st.button("⚡  Run Screener", use_container_width=True)
-
-    # Determine ticker list
     universe = IDX_TICKERS[:]
-    if uploaded:
-        content = uploaded.read().decode("utf-8")
-        custom  = [t.strip().upper() for t in content.splitlines() if t.strip()]
-        universe = custom
-        st.markdown(f'<div class="info-box">📂 Using uploaded list → {len(universe)} tickers</div>',
-                    unsafe_allow_html=True)
+    render_hero(len(universe))
 
-    # ── Stats bar
-    st.markdown(f"""
-    <div class="stats-bar">
-        <div class="stat-item">
-            <div class="stat-value">{len(universe)}</div>
-            <div class="stat-label">Stocks Watched</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">14 / 3</div>
-            <div class="stat-label">K / D Period</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">&lt; 20</div>
-            <div class="stat-label">Oversold Zone</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">EMA 50</div>
-            <div class="stat-label">Trend Filter</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-value">{datetime.now().strftime("%d %b")}</div>
-            <div class="stat-label">As Of Date</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Info box
-    st.markdown("""
-    <div class="info-box">
-        SIGNAL  →  %K crosses above %D  &  %K &lt; 20 (oversold)  &  Close &gt; EMA(50) (uptrend)<br>
-        DATA    →  Daily close · 3-month lookback · Yahoo Finance (cached 1hr)<br>
-        LIMIT   →  Screens up to 100 tickers per run to respect rate limits
-    </div>
-    """, unsafe_allow_html=True)
-
+    run = st.button("⚡  Run Screener", use_container_width=True)
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # ── Results area
+    # ── Scan
     if run:
-        # Limit universe
-        tickers_to_scan = universe[:100]
-
+        to_scan  = universe[:100]
         results  = []
-        progress = st.progress(0, text="Initialising…")
+        prog     = st.progress(0, text="Starting…")
         status   = st.empty()
 
-        for i, ticker in enumerate(tickers_to_scan):
-            pct  = (i + 1) / len(tickers_to_scan)
-            progress.progress(pct, text=f"Scanning {ticker}…")
-            status.markdown(f'<span style="font-family:Space Mono;font-size:0.75rem;color:#64748b">'
-                            f'{i+1}/{len(tickers_to_scan)} · {ticker}</span>', unsafe_allow_html=True)
+        for i, ticker in enumerate(to_scan):
+            prog.progress((i + 1) / len(to_scan), text=f"Scanning {ticker}…")
+            status.markdown(
+                f'<span style="font-family:IBM Plex Mono;font-size:0.68rem;'
+                f'color:#7d8590">{i+1}/{len(to_scan)} · {ticker}</span>',
+                unsafe_allow_html=True,
+            )
             res = check_signal(ticker)
             if res:
                 results.append(res)
-            time.sleep(0.05)  # gentle rate limiting
+            time.sleep(0.05)
 
-        progress.empty()
-        status.empty()
+        prog.empty(); status.empty()
+        st.session_state.update(results=results, scanned=len(to_scan), selected=None)
 
-        # Store in session
-        st.session_state["results"]  = results
-        st.session_state["scanned"]  = len(tickers_to_scan)
-        st.session_state["selected"] = None
-
-    # ── Display results
-    if "results" in st.session_state:
-        results  = st.session_state["results"]
-        scanned  = st.session_state.get("scanned", 0)
-        selected = st.session_state.get("selected", None)
-
-        col_left, col_right = st.columns([1, 2], gap="large")
-
-        with col_left:
-            hit_rate = len(results) / scanned * 100 if scanned else 0
-            st.markdown(f"""
-            <div class="section-label">Scan complete · {scanned} stocks · {hit_rate:.1f}% hit rate</div>
-            """, unsafe_allow_html=True)
-
-            if results:
-                # Export CSV
-                df_export = pd.DataFrame([
-                    {"Ticker": r["ticker"], "%K": r["%K"], "%D": r["%D"], "Signal": r["signal"]}
-                    for r in results
-                ])
-                st.download_button(
-                    "⬇ Export CSV",
-                    df_export.to_csv(index=False).encode(),
-                    file_name=f"idx_signals_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-                st.markdown("<br>", unsafe_allow_html=True)
-
-                for i, r in enumerate(results):
-                    render_signal_card(r, i)
-                    if st.button(f"View Chart →", key=f"btn_{i}", use_container_width=True):
-                        st.session_state["selected"] = i
-                        selected = i
-            else:
-                st.markdown("""
-                <div class="empty-state">
-                    <div class="empty-icon">🔍</div>
-                    <div class="empty-title">No signals found</div>
-                    <div class="empty-sub">No stocks meet the golden cross<br>+ oversold criteria today.</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        with col_right:
-            if selected is not None and selected < len(results):
-                r   = results[selected]
-                fig = build_chart(r)
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-                # Quick stats below chart
-                c1, c2, c3, c4 = st.columns(4)
-                df = r["df"]
-                last_close = float(df["Close"].iloc[-1])
-                prev_close = float(df["Close"].iloc[-2])
-                chg = (last_close - prev_close) / prev_close * 100
-
-                c1.metric("Last Close", f"Rp {last_close:,.0f}", f"{chg:+.2f}%")
-                c2.metric("%K (Fast)", f"{r['%K']:.2f}", "Oversold" if r["%K"] < 20 else "")
-                c3.metric("%D (Slow)", f"{r['%D']:.2f}")
-                c4.metric("EMA 50", f"Rp {r['ema50']:,.0f}", "Price above ✓")
-            else:
-                st.markdown("""
-                <div class="empty-state" style="margin-top:4rem">
-                    <div class="empty-icon" style="font-size:2rem">👈</div>
-                    <div class="empty-title">Select a stock</div>
-                    <div class="empty-sub">Click "View Chart" on any<br>signal to see the chart.</div>
-                </div>
-                """, unsafe_allow_html=True)
-    else:
+    # ── Show results
+    if "results" not in st.session_state:
         st.markdown("""
-        <div class="empty-state">
+        <div class="empty">
             <div class="empty-icon">📡</div>
             <div class="empty-title">Ready to scan</div>
-            <div class="empty-sub">Press Run Screener to begin.<br>Results update daily.</div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="empty-sub">Tap Run Screener to begin.<br>Results cached for 1 hour.</div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    results  = st.session_state["results"]
+    scanned  = st.session_state.get("scanned", 0)
+    selected = st.session_state.get("selected", None)
+
+    hit = len(results) / scanned * 100 if scanned else 0
+    st.markdown(
+        f'<div class="sec-lbl">{scanned} scanned · {len(results)} signals · {hit:.1f}% hit rate</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not results:
+        st.markdown("""
+        <div class="empty">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-title">No signals today</div>
+            <div class="empty-sub">No stocks passed all 3 filters.<br>Try again after market close.</div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    # CSV export
+    df_export = pd.DataFrame([{
+        "Ticker": r["ticker"], "Close": r["close"], "Chg%": r["chg"],
+        "Slow%K": r["%K"], "Slow%D": r["%D"],
+        "PSAR": r["sar"], "Above PSAR%": r["sar_pct"],
+    } for r in results])
+    st.download_button(
+        "⬇  Export CSV", df_export.to_csv(index=False).encode(),
+        file_name=f"idx_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv", use_container_width=True,
+    )
+
+    # Cards — chart expands inline below each card (works great on mobile)
+    for i, r in enumerate(results):
+        render_card(r, i)
+        if st.button(f"View chart →  {r['ticker'].replace('.JK','')}", 
+                     key=f"btn_{i}", use_container_width=True):
+            st.session_state["selected"] = i if selected != i else None
+            selected = st.session_state["selected"]
+
+        if selected == i:
+            fig = build_chart(r)
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+            c2.metric("Slow%K", f"{r['%K']:.1f}")
+            c3.metric("Slow%D", f"{r['%D']:.1f}")
+            c4.metric("vs SAR", f"+{r['sar_pct']}%")
+            st.markdown("<hr>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
