@@ -318,7 +318,7 @@ IDX_TICKERS = list(dict.fromkeys([
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_data(ticker: str):
     try:
-        df = yf.download(ticker, period="6mo", interval="1d",
+        df = yf.download(ticker, period="60d", interval="1d",
                          progress=False, auto_adjust=True)
         if df.empty or len(df) < 30:
             return None
@@ -536,7 +536,7 @@ def render_hero(n):
         <div class="hero-title">IDX <em>Screener</em></div>
         <div class="hero-meta">
             Slow Stoch(10/5/5) · Oversold &lt;20 · Parabolic SAR<br>
-            Daily close · {datetime.now().strftime("%d %b %Y")}
+            60-day daily · {datetime.now().strftime("%d %b %Y")}
         </div>
     </div>
     <div class="stats-grid">
@@ -561,7 +561,7 @@ def render_hero(n):
         SIGNAL → Slow%K crosses above Slow%D<br>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Slow%K &lt; 20 (oversold zone)<br>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Price above Parabolic SAR (bull)<br>
-        DATA &nbsp;&nbsp;→ 6-month daily · cached 1 hr
+        DATA &nbsp;&nbsp;→ 60-day daily · cached 1 hr
     </div>
     """, unsafe_allow_html=True)
 
