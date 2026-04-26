@@ -177,9 +177,11 @@ html, body, [class*="css"] {
     border-radius: 4px;
     white-space: nowrap;
 }
-.b-green { background: var(--gdim); color: var(--green); border: 1px solid var(--gbdr); }
+.b-green  { background: var(--gdim); color: var(--green); border: 1px solid var(--gbdr); }
 .b-orange { background: rgba(240,136,62,0.12); color: var(--orange); border: 1px solid rgba(240,136,62,0.28); }
-.b-blue  { background: rgba(88,166,255,0.10); color: var(--blue);   border: 1px solid rgba(88,166,255,0.28); }
+.b-blue   { background: rgba(88,166,255,0.10); color: var(--blue);   border: 1px solid rgba(88,166,255,0.28); }
+.b-red    { background: rgba(248,81,73,0.10);  color: var(--red);    border: 1px solid rgba(248,81,73,0.28); }
+.b-muted  { background: rgba(125,133,144,0.10); color: var(--muted); border: 1px solid rgba(125,133,144,0.22); }
 .sig-vals {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -197,6 +199,18 @@ html, body, [class*="css"] {
     font-size: 0.88rem;
     font-weight: 600;
     color: var(--green);
+}
+.sv-num-red {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--red);
+}
+.sv-num-muted {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--muted);
 }
 
 /* ── Section label ── */
@@ -311,7 +325,8 @@ IDX_TICKERS = list(dict.fromkeys([
     "AKRA.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK",
     "FREN.JK","ARTO.JK","ADMF.JK","APLN.JK","BSSR.JK","BTEK.JK",
     "BNBR.JK","DEWA.JK","BULL.JK","PPRE.JK","SMAA.JK","KIJA.JK",
-    "VKTR.JK","ELSA.JK","OILS.JK","MBMA.JK","WIIM.JK",
+    "VKTR.JK","ELSA.JK","OILS.JK","BULL.JK","WIIM.JK","BDMN.JK","ISAT.JK","TPIA.JK","TPIA.JK",
+    "DKFT.JK","ENRG.JK","BIPI.JK","WIFI.JK","INET.JK",
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
@@ -380,42 +395,58 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
     return (pd.Series(sar,   index=df.index),
             pd.Series(trend, index=df.index))
 
-# ── Signal check ──────────────────────────────────────────────────────────────
+# ── Phase 1: Golden Cross + Oversold only (no PSAR) ──────────────────────────
 def check_signal(ticker: str):
     df = fetch_data(ticker)
     if df is None:
         return None
 
-    sk, sd        = compute_stochastic(df)
-    sar, trend    = compute_psar(df)
+    sk, sd = compute_stochastic(df)
 
-    if any(s.isna().iloc[-1] for s in [sk, sd, sar]):
+    if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
         return None
 
     crossover = (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])
     oversold  = sk.iloc[-1] < 20
-    sar_bull  = trend.iloc[-1] == 1
 
-    if crossover and oversold and sar_bull:
-        close     = float(df["Close"].iloc[-1])
-        sar_val   = float(sar.iloc[-1])
-        prev      = float(df["Close"].iloc[-2])
+    if crossover and oversold:
+        close = float(df["Close"].iloc[-1])
+        prev  = float(df["Close"].iloc[-2])
         return {
             "ticker":   ticker,
             "%K":       round(float(sk.iloc[-1]), 2),
             "%D":       round(float(sd.iloc[-1]), 2),
-            "sar":      round(sar_val, 2),
             "close":    round(close, 2),
             "chg":      round((close - prev) / prev * 100, 2),
-            "sar_pct":  round((close - sar_val) / sar_val * 100, 2),
-            "signal":   "Stoch Cross + Oversold + PSAR Bull",
+            # PSAR fields filled in phase 2
+            "sar":      None,
+            "sar_pct":  None,
+            "sar_bull": None,
+            "sar_s":    None,
+            "trend":    None,
             "df":       df,
             "sk":       sk,
             "sd":       sd,
-            "sar_s":    sar,
-            "trend":    trend,
         }
     return None
+
+# ── Phase 2: Enrich result with PSAR ─────────────────────────────────────────
+def enrich_with_psar(r: dict) -> dict:
+    df = r["df"]
+    sar, trend = compute_psar(df)
+
+    if sar.isna().iloc[-1]:
+        r["sar_s"] = sar
+        r["trend"] = trend
+        return r
+
+    sar_val      = float(sar.iloc[-1])
+    r["sar"]     = round(sar_val, 2)
+    r["sar_pct"] = round((r["close"] - sar_val) / sar_val * 100, 2)
+    r["sar_bull"]= int(trend.iloc[-1]) == 1
+    r["sar_s"]   = sar
+    r["trend"]   = trend
+    return r
 
 # ── Get chart data without signal requirement ─────────────────────────────────
 def get_chart_data(ticker: str):
@@ -568,14 +599,40 @@ def render_hero(n):
 
 def render_card(r, idx):
     k, d = r["%K"], r["%D"]
+
+    # Border colour based on PSAR state
+    if r.get("sar_bull") is True:
+        border_color = "#f0883e"   # orange — bullish
+    elif r.get("sar_bull") is False:
+        border_color = "#f85149"   # red — bearish
+    else:
+        border_color = "#3ddc84"   # green — pending
+
+    # PSAR badge
+    if r.get("sar_bull") is True:
+        psar_badge = '<span class="badge b-orange">PSAR ↑</span>'
+    elif r.get("sar_bull") is False:
+        psar_badge = '<span class="badge b-red">PSAR ↓</span>'
+    else:
+        psar_badge = '<span class="badge b-muted">PSAR …</span>'
+
+    # vs SAR value
+    if r.get("sar_pct") is not None:
+        sar_sign = "+" if r["sar_pct"] >= 0 else ""
+        sar_display = f"{sar_sign}{r['sar_pct']}%"
+        sar_cls = "sv-num" if r["sar_pct"] >= 0 else "sv-num-red"
+    else:
+        sar_display = "—"
+        sar_cls = "sv-num-muted"
+
     st.markdown(f"""
-    <div class="sig-card">
+    <div class="sig-card" style="border-left-color:{border_color}">
         <div class="sig-top">
             <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
             <div class="badges">
                 <span class="badge b-green">✦ Cross</span>
                 <span class="badge b-green">Oversold</span>
-                <span class="badge b-orange">PSAR ↑</span>
+                {psar_badge}
             </div>
         </div>
         <div class="sig-vals">
@@ -593,7 +650,7 @@ def render_card(r, idx):
             </div>
             <div>
                 <div class="sv-lbl">vs SAR</div>
-                <div class="sv-num">+{r["sar_pct"]}%</div>
+                <div class="{sar_cls}">{sar_display}</div>
             </div>
         </div>
     </div>
@@ -661,7 +718,7 @@ def main():
         status   = st.empty()
 
         for i, ticker in enumerate(to_scan):
-            prog.progress((i + 1) / len(to_scan), text=f"Scanning {ticker}…")
+            prog.progress((i + 1) / len(to_scan), text=f"[Phase 1] Scanning {ticker}…")
             status.markdown(
                 f'<span style="font-family:IBM Plex Mono;font-size:0.68rem;'
                 f'color:#7d8590">{i+1}/{len(to_scan)} · {ticker}</span>',
@@ -673,7 +730,7 @@ def main():
             time.sleep(0.05)
 
         prog.empty(); status.empty()
-        st.session_state.update(results=results, scanned=len(to_scan), selected=None)
+        st.session_state.update(results=results, scanned=len(to_scan), selected=None, psar_done=False)
 
     # ── Show screener results
     if "results" not in st.session_state:
@@ -684,13 +741,14 @@ def main():
             <div class="empty-sub">Tap Run Screener to begin.<br>Results cached for 1 hour.</div>
         </div>""", unsafe_allow_html=True)
     else:
-        results  = st.session_state["results"]
-        scanned  = st.session_state.get("scanned", 0)
-        selected = st.session_state.get("selected", None)
+        results   = st.session_state["results"]
+        scanned   = st.session_state.get("scanned", 0)
+        selected  = st.session_state.get("selected", None)
+        psar_done = st.session_state.get("psar_done", False)
 
         hit = len(results) / scanned * 100 if scanned else 0
         st.markdown(
-            f'<div class="sec-lbl">{scanned} scanned · {len(results)} signals · {hit:.1f}% hit rate</div>',
+            f'<div class="sec-lbl">{scanned} scanned · {len(results)} golden crosses · {hit:.1f}% hit rate</div>',
             unsafe_allow_html=True,
         )
 
@@ -698,21 +756,51 @@ def main():
             st.markdown("""
             <div class="empty">
                 <div class="empty-icon">🔍</div>
-                <div class="empty-title">No signals today</div>
-                <div class="empty-sub">No stocks passed all 3 filters.<br>Try again after market close.</div>
+                <div class="empty-title">No golden crosses today</div>
+                <div class="empty-sub">No stocks had Slow%K cross above Slow%D in oversold zone.<br>Try again after market close.</div>
             </div>""", unsafe_allow_html=True)
         else:
+            # Phase 2 banner while PSAR is pending
+            if not psar_done:
+                st.markdown(f"""
+                <div style="background:rgba(61,220,132,0.07);border:1px solid rgba(61,220,132,0.20);
+                border-radius:7px;padding:0.6rem 0.9rem;font-family:'IBM Plex Mono',monospace;
+                font-size:0.67rem;color:#3ddc84;line-height:1.7;margin-bottom:1rem;">
+                    <strong style="color:#fff">Phase 1 complete</strong> — {len(results)} stocks with Stochastic Golden Cross in oversold zone.<br>
+                    Loading PSAR trend below ↓ — orange border = bullish, red = bearish.
+                </div>
+                """, unsafe_allow_html=True)
+
             # CSV export
             df_export = pd.DataFrame([{
                 "Ticker": r["ticker"], "Close": r["close"], "Chg%": r["chg"],
                 "Slow%K": r["%K"], "Slow%D": r["%D"],
-                "PSAR": r["sar"], "Above PSAR%": r["sar_pct"],
+                "PSAR": r.get("sar", "—"), "Above PSAR%": r.get("sar_pct", "—"),
+                "PSAR Bull": r.get("sar_bull", "—"),
             } for r in results])
             st.download_button(
                 "⬇  Export CSV", df_export.to_csv(index=False).encode(),
                 file_name=f"idx_{datetime.now().strftime('%Y%m%d')}.csv",
                 mime="text/csv", use_container_width=True,
             )
+
+            # ── Phase 2: enrich with PSAR ─────────────────────────────────
+            if not psar_done:
+                prog2   = st.progress(0, text="Loading PSAR…")
+                status2 = st.empty()
+                for i, r in enumerate(results):
+                    prog2.progress((i + 1) / len(results),
+                                   text=f"[Phase 2] PSAR for {r['ticker']}…")
+                    status2.markdown(
+                        f'<span style="font-family:IBM Plex Mono;font-size:0.68rem;color:#7d8590">'
+                        f'PSAR {i+1}/{len(results)} · {r["ticker"]}</span>',
+                        unsafe_allow_html=True,
+                    )
+                    results[i] = enrich_with_psar(r)
+                prog2.empty(); status2.empty()
+                st.session_state["results"]   = results
+                st.session_state["psar_done"] = True
+                st.rerun()
 
             for i, r in enumerate(results):
                 render_card(r, i)
@@ -729,7 +817,9 @@ def main():
                     c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
                     c2.metric("Slow%K", f"{r['%K']:.1f}")
                     c3.metric("Slow%D", f"{r['%D']:.1f}")
-                    c4.metric("vs SAR", f"+{r['sar_pct']}%")
+                    sar_delta = (f"+{r['sar_pct']}%" if r.get("sar_pct") is not None and r["sar_pct"] >= 0
+                                 else f"{r['sar_pct']}%" if r.get("sar_pct") is not None else "—")
+                    c4.metric("vs SAR", sar_delta)
                     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════════
