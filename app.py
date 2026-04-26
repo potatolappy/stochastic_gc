@@ -179,6 +179,7 @@ html, body, [class*="css"] {
 }
 .b-green { background: var(--gdim); color: var(--green); border: 1px solid var(--gbdr); }
 .b-orange { background: rgba(240,136,62,0.12); color: var(--orange); border: 1px solid rgba(240,136,62,0.28); }
+.b-blue  { background: rgba(88,166,255,0.10); color: var(--blue);   border: 1px solid rgba(88,166,255,0.28); }
 .sig-vals {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -198,34 +199,6 @@ html, body, [class*="css"] {
     color: var(--green);
 }
 
-/* ── Checklist row ── */
-.sig-checks {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 0.55rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-}
-.chk-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.05em;
-}
-.chk-ok  { color: var(--green); }
-.chk-no  { color: var(--red); }
-.chk-dot {
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.6rem; font-weight: 700; flex-shrink: 0;
-}
-.chk-dot-ok  { background: var(--gdim); border: 1px solid var(--gbdr); color: var(--green); }
-.chk-dot-no  { background: rgba(248,81,73,0.12); border: 1px solid rgba(248,81,73,0.28); color: var(--red); }
-
 /* ── Section label ── */
 .sec-lbl {
     font-family: 'IBM Plex Mono', monospace;
@@ -236,6 +209,47 @@ html, body, [class*="css"] {
     margin-bottom: 0.6rem;
     padding-bottom: 0.4rem;
     border-bottom: 1px solid var(--border);
+}
+
+/* ── Section header (larger) ── */
+.sec-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin: 1.6rem 0 0.7rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid rgba(88,166,255,0.20);
+}
+
+/* ── Chart browser card ── */
+.browser-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--blue);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.7rem;
+}
+.browser-vals {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.55rem;
+}
+.sv-num-blue {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--blue);
+}
+.sv-num-red {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--red);
 }
 
 /* ── Download button ── */
@@ -256,6 +270,12 @@ html, body, [class*="css"] {
     font-size: 0.95rem !important;
 }
 [data-testid="stMetricLabel"] { font-size: 0.72rem !important; }
+
+/* ── Select box ── */
+[data-baseweb="select"] {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+}
 
 /* ── Empty state ── */
 .empty {
@@ -291,16 +311,14 @@ IDX_TICKERS = list(dict.fromkeys([
     "AKRA.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK",
     "FREN.JK","ARTO.JK","ADMF.JK","APLN.JK","BSSR.JK","BTEK.JK",
     "BNBR.JK","DEWA.JK","BULL.JK","PPRE.JK","SMAA.JK","KIJA.JK",
-    "VKTR.JK","ELSA.JK","OILS.JK",
-    "MBMA.JK","BUMI.JK","WIIM.JK","DATA.JK","FILM.JK","INET.JK","BULL.JK",
-    "ENRG.JK",
+    "VKTR.JK","ELSA.JK","OILS.JK","MBMA.JK","WIIM.JK",
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_data(ticker: str):
     try:
-        df = yf.download(ticker, period="6mo", interval="1d",
+        df = yf.download(ticker, period="60d", interval="1d",
                          progress=False, auto_adjust=True)
         if df.empty or len(df) < 30:
             return None
@@ -325,7 +343,7 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
     lo    = df["Low"].values
     n     = len(lo)
     sar   = np.full(n, np.nan)
-    trend = np.ones(n, dtype=int)   # 1=bull, -1=bear
+    trend = np.ones(n, dtype=int)
     ep    = np.full(n, np.nan)
     af    = np.full(n, af0)
 
@@ -337,7 +355,7 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
         if pt == 1:
             ns = ps + pa * (pe - ps)
             ns = min(ns, lo[i-1], lo[max(0,i-2)])
-            if lo[i] < ns:                          # reversal → bear
+            if lo[i] < ns:
                 trend[i], sar[i], ep[i], af[i] = -1, pe, lo[i], af0
             else:
                 trend[i] = 1
@@ -349,7 +367,7 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
         else:
             ns = ps + pa * (pe - ps)
             ns = max(ns, hi[i-1], hi[max(0,i-2)])
-            if hi[i] > ns:                          # reversal → bull
+            if hi[i] > ns:
                 trend[i], sar[i], ep[i], af[i] = 1, pe, hi[i], af0
             else:
                 trend[i] = -1
@@ -383,24 +401,50 @@ def check_signal(ticker: str):
         sar_val   = float(sar.iloc[-1])
         prev      = float(df["Close"].iloc[-2])
         return {
-            "ticker":    ticker,
-            "%K":        round(float(sk.iloc[-1]), 2),
-            "%D":        round(float(sd.iloc[-1]), 2),
-            "sar":       round(sar_val, 2),
-            "close":     round(close, 2),
-            "chg":       round((close - prev) / prev * 100, 2),
-            "sar_pct":   round((close - sar_val) / sar_val * 100, 2),
-            "signal":    "Stoch Cross + Oversold + PSAR Bull",
-            "crossover": crossover,
-            "oversold":  oversold,
-            "sar_bull":  sar_bull,
-            "df":        df,
-            "sk":        sk,
-            "sd":        sd,
-            "sar_s":     sar,
-            "trend":     trend,
+            "ticker":   ticker,
+            "%K":       round(float(sk.iloc[-1]), 2),
+            "%D":       round(float(sd.iloc[-1]), 2),
+            "sar":      round(sar_val, 2),
+            "close":    round(close, 2),
+            "chg":      round((close - prev) / prev * 100, 2),
+            "sar_pct":  round((close - sar_val) / sar_val * 100, 2),
+            "signal":   "Stoch Cross + Oversold + PSAR Bull",
+            "df":       df,
+            "sk":       sk,
+            "sd":       sd,
+            "sar_s":    sar,
+            "trend":    trend,
         }
     return None
+
+# ── Get chart data without signal requirement ─────────────────────────────────
+def get_chart_data(ticker: str):
+    """Fetch and compute indicators for any ticker, no signal filter."""
+    df = fetch_data(ticker)
+    if df is None:
+        return None
+    sk, sd     = compute_stochastic(df)
+    sar, trend = compute_psar(df)
+    close      = float(df["Close"].iloc[-1])
+    prev       = float(df["Close"].iloc[-2])
+    sar_val    = float(sar.iloc[-1])
+    return {
+        "ticker":  ticker,
+        "%K":      round(float(sk.iloc[-1]), 2),
+        "%D":      round(float(sd.iloc[-1]), 2),
+        "sar":     round(sar_val, 2),
+        "close":   round(close, 2),
+        "chg":     round((close - prev) / prev * 100, 2),
+        "sar_pct": round((close - sar_val) / sar_val * 100, 2),
+        "sar_bull": int(trend.iloc[-1]) == 1,
+        "crossover": (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1]),
+        "oversold": float(sk.iloc[-1]) < 20,
+        "df":      df,
+        "sk":      sk,
+        "sd":      sd,
+        "sar_s":   sar,
+        "trend":   trend,
+    }
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 def build_chart(r):
@@ -447,21 +491,22 @@ def build_chart(r):
         line=dict(color="#f0883e", width=1.8, dash="dot"), name="Slow%D",
     ), row=2, col=1)
 
-    # Oversold band & lines
-    fig.add_hrect(y0=0, y1=20, fillcolor="rgba(61,220,132,0.06)",
-                  line_width=0, row=2, col=1)
+    # Oversold / overbought bands
+    fig.add_hrect(y0=0,  y1=20,  fillcolor="rgba(61,220,132,0.06)",  line_width=0, row=2, col=1)
+    fig.add_hrect(y0=80, y1=100, fillcolor="rgba(248,81,73,0.06)",   line_width=0, row=2, col=1)
     for lvl in [20, 80]:
         fig.add_hline(y=lvl, line_dash="dash",
                       line_color="rgba(255,255,255,0.1)", line_width=1,
                       row=2, col=1)
 
-    # Signal star
-    fig.add_trace(go.Scatter(
-        x=[sk.index[-1]], y=[sk.iloc[-1]], mode="markers",
-        marker=dict(size=11, color="#3ddc84", symbol="star",
-                    line=dict(color="#fff", width=1.5)),
-        name="Signal", showlegend=False,
-    ), row=2, col=1)
+    # Signal star if crossover in oversold
+    if r.get("crossover") and r.get("oversold"):
+        fig.add_trace(go.Scatter(
+            x=[sk.index[-1]], y=[sk.iloc[-1]], mode="markers",
+            marker=dict(size=11, color="#3ddc84", symbol="star",
+                        line=dict(color="#fff", width=1.5)),
+            name="Signal", showlegend=False,
+        ), row=2, col=1)
 
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
@@ -479,12 +524,6 @@ def build_chart(r):
         yaxis2=dict(range=[-5, 105], gridcolor="rgba(255,255,255,0.04)",
                     tickfont=dict(size=9), tickvals=[0,20,50,80,100]),
         height=440,
-        # Zoom price panel to last 7 trading days; stoch keeps full history
-        xaxis=dict(
-            range=[df.index[-7], df.index[-1]],
-            gridcolor="rgba(255,255,255,0.04)",
-        ),
-        xaxis2=dict(gridcolor="rgba(255,255,255,0.04)"),
     )
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)")
     return fig
@@ -497,7 +536,7 @@ def render_hero(n):
         <div class="hero-title">IDX <em>Screener</em></div>
         <div class="hero-meta">
             Slow Stoch(10/5/5) · Oversold &lt;20 · Parabolic SAR<br>
-            Daily close · {datetime.now().strftime("%d %b %Y")}
+            60-day daily · {datetime.now().strftime("%d %b %Y")}
         </div>
     </div>
     <div class="stats-grid">
@@ -522,31 +561,13 @@ def render_hero(n):
         SIGNAL → Slow%K crosses above Slow%D<br>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Slow%K &lt; 20 (oversold zone)<br>
         &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Price above Parabolic SAR (bull)<br>
-        DATA &nbsp;&nbsp;→ 6-month daily · cached 1 hr
+        DATA &nbsp;&nbsp;→ 60-day daily · cached 1 hr
     </div>
     """, unsafe_allow_html=True)
 
 
 def render_card(r, idx):
     k, d = r["%K"], r["%D"]
-
-    def chk(ok, label):
-        dot_cls  = "chk-dot-ok" if ok else "chk-dot-no"
-        txt_cls  = "chk-ok"     if ok else "chk-no"
-        icon     = "✓"          if ok else "✗"
-        return (f'<div class="chk-item {txt_cls}">'
-                f'<div class="chk-dot {dot_cls}">{icon}</div>{label}</div>')
-
-    gc_ok   = r.get("crossover", True)
-    psar_ok = r.get("sar_bull",  True)
-    os_ok   = r.get("oversold",  True)
-
-    psar_label = "PSAR Bullish" if psar_ok else "PSAR Bearish"
-    psar_badge = "b-orange" if psar_ok else "b-red"
-    psar_arrow = "↑" if psar_ok else "↓"
-
-    sar_sign = "+" if r["sar_pct"] >= 0 else ""
-
     st.markdown(f"""
     <div class="sig-card">
         <div class="sig-top">
@@ -554,13 +575,8 @@ def render_card(r, idx):
             <div class="badges">
                 <span class="badge b-green">✦ Cross</span>
                 <span class="badge b-green">Oversold</span>
-                <span class="badge {psar_badge}">PSAR {psar_arrow}</span>
+                <span class="badge b-orange">PSAR ↑</span>
             </div>
-        </div>
-        <div class="sig-checks">
-            {chk(gc_ok,   "Golden Cross")}
-            {chk(os_ok,   "Oversold &lt;20")}
-            {chk(psar_ok, psar_label)}
         </div>
         <div class="sig-vals">
             <div>
@@ -577,7 +593,52 @@ def render_card(r, idx):
             </div>
             <div>
                 <div class="sv-lbl">vs SAR</div>
-                <div class="sv-num">{sar_sign}{r["sar_pct"]}%</div>
+                <div class="sv-num">+{r["sar_pct"]}%</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_browser_card(r):
+    """Card for the Chart Browser section — blue accent, shows indicator status."""
+    chg_color = "var(--green)" if r["chg"] >= 0 else "var(--red)"
+    chg_sign  = "+" if r["chg"] >= 0 else ""
+    sar_label = "PSAR ↑" if r["sar_bull"] else "PSAR ↓"
+    sar_cls   = "b-orange" if r["sar_bull"] else "b-red"
+
+    badges = f'<span class="badge b-blue">{sar_label}</span>'
+    if r["oversold"]:
+        badges += ' <span class="badge b-green">Oversold</span>'
+    if r["crossover"]:
+        badges += ' <span class="badge b-green">✦ Cross</span>'
+
+    num_cls_sar = "sv-num" if r["sar_bull"] else "sv-num-red"
+
+    st.markdown(f"""
+    <div class="browser-card">
+        <div class="sig-top">
+            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
+            <div class="badges">{badges}</div>
+        </div>
+        <div class="browser-vals">
+            <div>
+                <div class="sv-lbl">Close</div>
+                <div class="sv-num-blue">{r["close"]:,}</div>
+            </div>
+            <div>
+                <div class="sv-lbl">Chg%</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;font-weight:600;color:{chg_color}">
+                    {chg_sign}{r["chg"]}%
+                </div>
+            </div>
+            <div>
+                <div class="sv-lbl">Slow%K</div>
+                <div class="sv-num-blue">{r["%K"]}</div>
+            </div>
+            <div>
+                <div class="sv-lbl">Slow%D</div>
+                <div class="sv-num-blue">{r["%D"]}</div>
             </div>
         </div>
     </div>
@@ -614,7 +675,7 @@ def main():
         prog.empty(); status.empty()
         st.session_state.update(results=results, scanned=len(to_scan), selected=None)
 
-    # ── Show results
+    # ── Show screener results
     if "results" not in st.session_state:
         st.markdown("""
         <div class="empty">
@@ -622,48 +683,100 @@ def main():
             <div class="empty-title">Ready to scan</div>
             <div class="empty-sub">Tap Run Screener to begin.<br>Results cached for 1 hour.</div>
         </div>""", unsafe_allow_html=True)
-        return
+    else:
+        results  = st.session_state["results"]
+        scanned  = st.session_state.get("scanned", 0)
+        selected = st.session_state.get("selected", None)
 
-    results  = st.session_state["results"]
-    scanned  = st.session_state.get("scanned", 0)
-    selected = st.session_state.get("selected", None)
+        hit = len(results) / scanned * 100 if scanned else 0
+        st.markdown(
+            f'<div class="sec-lbl">{scanned} scanned · {len(results)} signals · {hit:.1f}% hit rate</div>',
+            unsafe_allow_html=True,
+        )
 
-    hit = len(results) / scanned * 100 if scanned else 0
+        if not results:
+            st.markdown("""
+            <div class="empty">
+                <div class="empty-icon">🔍</div>
+                <div class="empty-title">No signals today</div>
+                <div class="empty-sub">No stocks passed all 3 filters.<br>Try again after market close.</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            # CSV export
+            df_export = pd.DataFrame([{
+                "Ticker": r["ticker"], "Close": r["close"], "Chg%": r["chg"],
+                "Slow%K": r["%K"], "Slow%D": r["%D"],
+                "PSAR": r["sar"], "Above PSAR%": r["sar_pct"],
+            } for r in results])
+            st.download_button(
+                "⬇  Export CSV", df_export.to_csv(index=False).encode(),
+                file_name=f"idx_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv", use_container_width=True,
+            )
+
+            for i, r in enumerate(results):
+                render_card(r, i)
+                if st.button(f"View chart →  {r['ticker'].replace('.JK','')}", 
+                             key=f"btn_{i}", use_container_width=True):
+                    st.session_state["selected"] = i if selected != i else None
+                    selected = st.session_state["selected"]
+
+                if selected == i:
+                    fig = build_chart(r)
+                    st.plotly_chart(fig, use_container_width=True,
+                                    config={"displayModeBar": False})
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+                    c2.metric("Slow%K", f"{r['%K']:.1f}")
+                    c3.metric("Slow%D", f"{r['%D']:.1f}")
+                    c4.metric("vs SAR", f"+{r['sar_pct']}%")
+                    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # ── CHART BROWSER ────────────────────────────────────────────────────────
+    # ════════════════════════════════════════════════════════════════════════
+    st.markdown('<div class="sec-header">📊 Chart Browser</div>', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="sec-lbl">{scanned} scanned · {len(results)} signals · {hit:.1f}% hit rate</div>',
+        '<div class="sec-lbl">Browse any ticker in the universe — no signal filter</div>',
         unsafe_allow_html=True,
     )
 
-    if not results:
-        st.markdown("""
-        <div class="empty">
-            <div class="empty-icon">🔍</div>
-            <div class="empty-title">No signals today</div>
-            <div class="empty-sub">No stocks passed all 3 filters.<br>Try again after market close.</div>
-        </div>""", unsafe_allow_html=True)
-        return
+    # Ticker selector — clean labels (strip .JK), keep value mapping
+    label_to_ticker = {t.replace(".JK", ""): t for t in universe}
+    labels = list(label_to_ticker.keys())
 
-    # CSV export
-    df_export = pd.DataFrame([{
-        "Ticker": r["ticker"], "Close": r["close"], "Chg%": r["chg"],
-        "Slow%K": r["%K"], "Slow%D": r["%D"],
-        "PSAR": r["sar"], "Above PSAR%": r["sar_pct"],
-    } for r in results])
-    st.download_button(
-        "⬇  Export CSV", df_export.to_csv(index=False).encode(),
-        file_name=f"idx_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv", use_container_width=True,
-    )
+    col_sel, col_btn = st.columns([3, 1])
+    with col_sel:
+        chosen_label = st.selectbox(
+            "Select ticker",
+            options=labels,
+            index=labels.index("ISAT") if "ISAT" in labels else 0,
+            label_visibility="collapsed",
+        )
+    with col_btn:
+        load_chart = st.button("Load  →", key="browse_load", use_container_width=True)
 
-    # Cards — chart expands inline below each card (works great on mobile)
-    for i, r in enumerate(results):
-        render_card(r, i)
-        if st.button(f"View chart →  {r['ticker'].replace('.JK','')}", 
-                     key=f"btn_{i}", use_container_width=True):
-            st.session_state["selected"] = i if selected != i else None
-            selected = st.session_state["selected"]
+    # Also allow multi-select to compare a few tickers at once
+    with st.expander("📋  Compare multiple tickers", expanded=False):
+        multi_labels = st.multiselect(
+            "Pick up to 5 tickers",
+            options=labels,
+            default=[],
+            max_selections=5,
+            label_visibility="collapsed",
+        )
+        load_multi = st.button("Load selected charts", key="browse_multi_load",
+                               use_container_width=True)
 
-        if selected == i:
+    # ── Single ticker chart
+    if load_chart:
+        ticker = label_to_ticker[chosen_label]
+        with st.spinner(f"Fetching {ticker}…"):
+            r = get_chart_data(ticker)
+        if r is None:
+            st.error(f"Could not load data for {ticker}. Yahoo Finance may be rate-limiting — try again shortly.")
+        else:
+            render_browser_card(r)
             fig = build_chart(r)
             st.plotly_chart(fig, use_container_width=True,
                             config={"displayModeBar": False})
@@ -671,7 +784,28 @@ def main():
             c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
             c2.metric("Slow%K", f"{r['%K']:.1f}")
             c3.metric("Slow%D", f"{r['%D']:.1f}")
-            c4.metric("vs SAR", f"+{r['sar_pct']}%")
+            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
+            c4.metric("vs SAR", sar_delta)
+
+    # ── Multi-ticker charts
+    if load_multi and multi_labels:
+        for lbl in multi_labels:
+            ticker = label_to_ticker[lbl]
+            with st.spinner(f"Fetching {ticker}…"):
+                r = get_chart_data(ticker)
+            if r is None:
+                st.warning(f"No data for {ticker} — skipped.")
+                continue
+            render_browser_card(r)
+            fig = build_chart(r)
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+            c2.metric("Slow%K", f"{r['%K']:.1f}")
+            c3.metric("Slow%D", f"{r['%D']:.1f}")
+            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
+            c4.metric("vs SAR", sar_delta)
             st.markdown("<hr>", unsafe_allow_html=True)
 
 
