@@ -395,8 +395,9 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
     return (pd.Series(sar,   index=df.index),
             pd.Series(trend, index=df.index))
 
-# ── Phase 1: Golden Cross + Oversold only (no PSAR) ──────────────────────────
+# ── Phase 1: Golden Cross only ────────────────────────────────────────────────
 def check_signal(ticker: str):
+    """Returns signal for any Slow%K cross above Slow%D. Oversold is data, not a filter."""
     df = fetch_data(ticker)
     if df is None:
         return None
@@ -407,9 +408,8 @@ def check_signal(ticker: str):
         return None
 
     crossover = (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])
-    oversold  = sk.iloc[-1] < 20
 
-    if crossover and oversold:
+    if crossover:
         close = float(df["Close"].iloc[-1])
         prev  = float(df["Close"].iloc[-2])
         return {
@@ -418,6 +418,7 @@ def check_signal(ticker: str):
             "%D":       round(float(sd.iloc[-1]), 2),
             "close":    round(close, 2),
             "chg":      round((close - prev) / prev * 100, 2),
+            "oversold": float(sk.iloc[-1]) < 20,   # informational
             # PSAR fields filled in phase 2
             "sar":      None,
             "sar_pct":  None,
@@ -590,8 +591,8 @@ def render_hero(n):
     </div>
     <div class="info-pill">
         SIGNAL → Slow%K crosses above Slow%D<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Slow%K &lt; 20 (oversold zone)<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Price above Parabolic SAR (bull)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Oversold &lt;20 shown as badge (not filter)<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ Parabolic SAR trend shown as badge<br>
         DATA &nbsp;&nbsp;→ 60-day daily · cached 1 hr
     </div>
     """, unsafe_allow_html=True)
@@ -625,13 +626,15 @@ def render_card(r, idx):
         sar_display = "—"
         sar_cls = "sv-num-muted"
 
+    oversold_badge = '<span class="badge b-green">Oversold</span>' if r.get("oversold") else '<span class="badge b-muted">Not Oversold</span>'
+
     st.markdown(f"""
     <div class="sig-card" style="border-left-color:{border_color}">
         <div class="sig-top">
             <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
             <div class="badges">
                 <span class="badge b-green">✦ Cross</span>
-                <span class="badge b-green">Oversold</span>
+                {oversold_badge}
                 {psar_badge}
             </div>
         </div>
@@ -757,7 +760,7 @@ def main():
             <div class="empty">
                 <div class="empty-icon">🔍</div>
                 <div class="empty-title">No golden crosses today</div>
-                <div class="empty-sub">No stocks had Slow%K cross above Slow%D in oversold zone.<br>Try again after market close.</div>
+                <div class="empty-sub">No stocks had Slow%K cross above Slow%D.<br>Try again after market close.</div>
             </div>""", unsafe_allow_html=True)
         else:
             # Phase 2 banner while PSAR is pending
@@ -766,8 +769,8 @@ def main():
                 <div style="background:rgba(61,220,132,0.07);border:1px solid rgba(61,220,132,0.20);
                 border-radius:7px;padding:0.6rem 0.9rem;font-family:'IBM Plex Mono',monospace;
                 font-size:0.67rem;color:#3ddc84;line-height:1.7;margin-bottom:1rem;">
-                    <strong style="color:#fff">Phase 1 complete</strong> — {len(results)} stocks with Stochastic Golden Cross in oversold zone.<br>
-                    Loading PSAR trend below ↓ — orange border = bullish, red = bearish.
+                    <strong style="color:#fff">Phase 1 complete</strong> — {len(results)} Golden Cross signals found.<br>
+                    Loading PSAR trend ↓ — orange border = bullish, red = bearish.
                 </div>
                 """, unsafe_allow_html=True)
 
