@@ -9,7 +9,7 @@ import time
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="IDX Screener",
+    page_title="S&P 500 Screener",
     page_icon="📈",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -307,27 +307,71 @@ hr { border-color: var(--border) !important; margin: 0.9rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Ticker universe (deduped) ─────────────────────────────────────────────────
-IDX_TICKERS = list(dict.fromkeys([
-    "BBCA.JK","BBRI.JK","BMRI.JK","BBNI.JK","BRIS.JK","BTPS.JK","BJTM.JK",
-    "BNGA.JK","BDMN.JK","BNII.JK","MEGA.JK","PNBN.JK","NISP.JK","BBKP.JK",
-    "TLKM.JK","EXCL.JK","ISAT.JK","GOTO.JK","BUKA.JK","EMTK.JK","MTEL.JK",
-    "UNVR.JK","ICBP.JK","INDF.JK","MYOR.JK","KLBF.JK","SIDO.JK","ULTJ.JK",
-    "HMSP.JK","GGRM.JK","CPIN.JK","JPFA.JK","MAIN.JK","ACES.JK","MAPI.JK",
-    "RALS.JK","LPPF.JK","ERAA.JK",
-    "ADRO.JK","PTBA.JK","ITMG.JK","HRUM.JK","BYAN.JK","DSSA.JK","INCO.JK",
-    "ANTM.JK","MDKA.JK","TINS.JK","MEDC.JK","ENRG.JK","PGAS.JK",
-    "BSDE.JK","SMRA.JK","CTRA.JK","PWON.JK","LPKR.JK","WIKA.JK","PTPP.JK",
-    "WSKT.JK","ADHI.JK",
-    "ASII.JK","AALI.JK","LSIP.JK","SIMP.JK","UNTR.JK","SMGR.JK","INTP.JK",
-    "JSMR.JK","GIAA.JK","BIRD.JK","MIKA.JK","HEAL.JK","SILO.JK",
-    "SCMA.JK","MNCN.JK","LINK.JK","TBIG.JK","TOWR.JK",
-    "AKRA.JK","BIPI.JK","TPIA.JK","DATA.JK","INET.JK","WIFI.JK","PANI.JK",
-    "FREN.JK","ARTO.JK","ADMF.JK","APLN.JK","BSSR.JK","BTEK.JK",
-    "BNBR.JK","DEWA.JK","BULL.JK","PPRE.JK","SMAA.JK","KIJA.JK",
-    "VKTR.JK","ELSA.JK","OILS.JK","BULL.JK","WIIM.JK","BDMN.JK","ISAT.JK","TPIA.JK","TPIA.JK",
-    "DKFT.JK","ENRG.JK","BIPI.JK","WIFI.JK","INET.JK","ESSA.JK","MBMA.JK", "AMMN.JK","ANTM.JK","MDKA.JK","EMTK.JK","BRMS.JK",   
-    "SMGR.JK","NCKL.JK","TRIM.JK","MRVL.US",
+# ── Ticker universe: S&P 500 constituents (deduped, dots -> dashes for yfinance) ──
+SP500_TICKERS = list(dict.fromkeys([
+    "MMM", "AOS", "ABT", "ABBV", "ACN", "ADBE", "AMD", "AES",
+    "AFL", "A", "APD", "ABNB", "AKAM", "ALB", "ARE", "ALGN",
+    "ALLE", "LNT", "ALL", "GOOGL", "GOOG", "MO", "AMZN", "AMCR",
+    "AEE", "AEP", "AXP", "AIG", "AMT", "AWK", "AMP", "AME",
+    "AMGN", "APH", "ADI", "AON", "APA", "APO", "AAPL", "AMAT",
+    "APP", "APTV", "ACGL", "ADM", "ARES", "ANET", "AJG", "AIZ",
+    "T", "ATO", "ADSK", "ADP", "AZO", "AVB", "AVY", "AXON",
+    "BKR", "BALL", "BAC", "BAX", "BDX", "BRK-B", "BBY", "TECH",
+    "BIIB", "BLK", "BX", "XYZ", "BNY", "BA", "BKNG", "BSX",
+    "BMY", "AVGO", "BR", "BRO", "BF-B", "BLDR", "BG", "BXP",
+    "CHRW", "CDNS", "CPT", "COF", "CAH", "CCL", "CARR", "CVNA",
+    "CASY", "CAT", "CBOE", "CBRE", "CDW", "COR", "CNC", "CNP",
+    "CF", "CRL", "SCHW", "CHTR", "CVX", "CMG", "CB", "CHD",
+    "CIEN", "CI", "CINF", "CTAS", "CSCO", "C", "CFG", "CLX",
+    "CME", "CMS", "KO", "CTSH", "COHR", "COIN", "CL", "CMCSA",
+    "FIX", "COP", "ED", "STZ", "CEG", "COO", "CPRT", "GLW",
+    "CPAY", "CTVA", "CSGP", "COST", "CRH", "CRWD", "CCI", "CSX",
+    "CMI", "CVS", "DHR", "DRI", "DDOG", "DVA", "DECK", "DE",
+    "DELL", "DAL", "DVN", "DXCM", "FANG", "DLR", "DG", "DLTR",
+    "D", "DPZ", "DASH", "DOV", "DOW", "DHI", "DTE", "DUK",
+    "DD", "ETN", "EBAY", "ECHO", "ECL", "EIX", "EW", "EA",
+    "ELV", "EME", "EMR", "ETR", "EOG", "EQT", "EFX", "EQIX",
+    "EQR", "ERIE", "ESS", "EL", "EG", "EVRG", "ES", "EXC",
+    "EXE", "EXPE", "EXPD", "EXR", "XOM", "FFIV", "FDS", "FICO",
+    "FAST", "FRT", "FDX", "FDXF", "FIS", "FITB", "FSLR", "FE",
+    "FISV", "FLEX", "F", "FTNT", "FTV", "FOXA", "FOX", "BEN",
+    "FCX", "GRMN", "IT", "GE", "GEHC", "GEV", "GEN", "GNRC",
+    "GD", "GIS", "GM", "GPC", "GILD", "GPN", "GL", "GDDY",
+    "GS", "HAL", "HIG", "HAS", "HCA", "DOC", "HSIC", "HSY",
+    "HPE", "HLT", "HD", "HONA", "HON", "HRL", "HST", "HWM",
+    "HPQ", "HUBB", "HUM", "HBAN", "HII", "IBM", "IEX", "IDXX",
+    "ITW", "INCY", "IR", "PODD", "INTC", "IBKR", "ICE", "IFF",
+    "IP", "INTU", "ISRG", "IVZ", "INVH", "IQV", "IRM", "JBHT",
+    "JBL", "JKHY", "J", "JNJ", "JCI", "JPM", "KVUE", "KDP",
+    "KEY", "KEYS", "KMB", "KIM", "KMI", "KKR", "KLAC", "KHC",
+    "KR", "LHX", "LH", "LRCX", "LVS", "LDOS", "LEN", "LII",
+    "LLY", "LIN", "LYV", "LMT", "L", "LOW", "LULU", "LITE",
+    "LYB", "MTB", "MPC", "MAR", "MRSH", "MLM", "MRVL", "MAS",
+    "MA", "MKC", "MCD", "MCK", "MDT", "MRK", "META", "MET",
+    "MTD", "MGM", "MCHP", "MU", "MSFT", "MAA", "MRNA", "TAP",
+    "MDLZ", "MPWR", "MNST", "MCO", "MS", "MOS", "MSI", "MSCI",
+    "NDAQ", "NTAP", "NFLX", "NEM", "NWSA", "NWS", "NEE", "NKE",
+    "NI", "NDSN", "NSC", "NTRS", "NOC", "NCLH", "NRG", "NUE",
+    "NVDA", "NVR", "NXPI", "ORLY", "OXY", "ODFL", "OMC", "ON",
+    "OKE", "ORCL", "OTIS", "PCAR", "PKG", "PLTR", "PANW", "PSKY",
+    "PH", "PAYX", "PYPL", "PNR", "PEP", "PFE", "PCG", "PM",
+    "PSX", "PNW", "PNC", "PPG", "PPL", "PFG", "PG", "PGR",
+    "PLD", "PRU", "PEG", "PTC", "PSA", "PHM", "PWR", "QCOM",
+    "DGX", "Q", "RL", "RJF", "RTX", "O", "REG", "REGN",
+    "RF", "RSG", "RMD", "RVTY", "HOOD", "ROK", "ROL", "ROP",
+    "ROST", "RCL", "SPGI", "CRM", "SNDK", "SBAC", "SLB", "STX",
+    "SRE", "NOW", "SHW", "SPG", "SWKS", "SJM", "SW", "SNA",
+    "SOLV", "SO", "LUV", "SWK", "SBUX", "STT", "STLD", "STE",
+    "SYK", "SMCI", "SYF", "SNPS", "SYY", "TMUS", "TROW", "TTWO",
+    "TPR", "TRGP", "TGT", "TEL", "TDY", "TER", "TSLA", "TXN",
+    "TPL", "TXT", "TMO", "TJX", "TKO", "TTD", "TSCO", "TT",
+    "TDG", "TRV", "TRMB", "TFC", "TYL", "TSN", "USB", "UBER",
+    "UDR", "ULTA", "UNP", "UAL", "UPS", "URI", "UNH", "UHS",
+    "VLO", "VEEV", "VTR", "VLTO", "VRSN", "VRSK", "VZ", "VRTX",
+    "VRT", "VTRS", "VICI", "V", "VST", "VMC", "WRB", "GWW",
+    "WAB", "WMT", "DIS", "WBD", "WM", "WAT", "WEC", "WFC",
+    "WELL", "WST", "WDC", "WY", "WSM", "WMB", "WTW", "WDAY",
+    "WYNN", "XEL", "XYL", "YUM", "ZBRA", "ZBH", "ZTS",
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
@@ -396,6 +440,43 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
     return (pd.Series(sar,   index=df.index),
             pd.Series(trend, index=df.index))
 
+# ── Shared result builders (used by check_signal / enrich_with_psar / get_chart_data) ──
+def _base_result(ticker: str, df, sk, sd) -> dict:
+    """Common Slow-Stoch fields shared by every code path that inspects a ticker."""
+    close = float(df["Close"].iloc[-1])
+    prev  = float(df["Close"].iloc[-2])
+    return {
+        "ticker":    ticker,
+        "%K":        round(float(sk.iloc[-1]), 2),
+        "%D":        round(float(sd.iloc[-1]), 2),
+        "close":     round(close, 2),
+        "chg":       round((close - prev) / prev * 100, 2),
+        "oversold":  float(sk.iloc[-1]) < 20,   # informational
+        "crossover": bool((sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])),
+        # PSAR fields — filled in by _apply_psar, None until then
+        "sar":       None,
+        "sar_pct":   None,
+        "sar_bull":  None,
+        "sar_s":     None,
+        "trend":     None,
+        "df":        df,
+        "sk":        sk,
+        "sd":        sd,
+    }
+
+
+def _apply_psar(r: dict, sar, trend) -> dict:
+    """Fill in a result dict's PSAR fields in place."""
+    r["sar_s"] = sar
+    r["trend"] = trend
+    if not sar.isna().iloc[-1]:
+        sar_val       = float(sar.iloc[-1])
+        r["sar"]      = round(sar_val, 2)
+        r["sar_pct"]  = round((r["close"] - sar_val) / sar_val * 100, 2)
+        r["sar_bull"] = int(trend.iloc[-1]) == 1
+    return r
+
+
 # ── Phase 1: Golden Cross only ────────────────────────────────────────────────
 def check_signal(ticker: str):
     """Returns signal for any Slow%K cross above Slow%D. Oversold is data, not a filter."""
@@ -404,51 +485,18 @@ def check_signal(ticker: str):
         return None
 
     sk, sd = compute_stochastic(df)
-
     if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
         return None
 
-    crossover = (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])
+    r = _base_result(ticker, df, sk, sd)
+    return r if r["crossover"] else None
 
-    if crossover:
-        close = float(df["Close"].iloc[-1])
-        prev  = float(df["Close"].iloc[-2])
-        return {
-            "ticker":   ticker,
-            "%K":       round(float(sk.iloc[-1]), 2),
-            "%D":       round(float(sd.iloc[-1]), 2),
-            "close":    round(close, 2),
-            "chg":      round((close - prev) / prev * 100, 2),
-            "oversold": float(sk.iloc[-1]) < 20,   # informational
-            # PSAR fields filled in phase 2
-            "sar":      None,
-            "sar_pct":  None,
-            "sar_bull": None,
-            "sar_s":    None,
-            "trend":    None,
-            "df":       df,
-            "sk":       sk,
-            "sd":       sd,
-        }
-    return None
 
 # ── Phase 2: Enrich result with PSAR ─────────────────────────────────────────
 def enrich_with_psar(r: dict) -> dict:
-    df = r["df"]
-    sar, trend = compute_psar(df)
+    sar, trend = compute_psar(r["df"])
+    return _apply_psar(r, sar, trend)
 
-    if sar.isna().iloc[-1]:
-        r["sar_s"] = sar
-        r["trend"] = trend
-        return r
-
-    sar_val      = float(sar.iloc[-1])
-    r["sar"]     = round(sar_val, 2)
-    r["sar_pct"] = round((r["close"] - sar_val) / sar_val * 100, 2)
-    r["sar_bull"]= int(trend.iloc[-1]) == 1
-    r["sar_s"]   = sar
-    r["trend"]   = trend
-    return r
 
 # ── Get chart data without signal requirement ─────────────────────────────────
 def get_chart_data(ticker: str):
@@ -456,28 +504,14 @@ def get_chart_data(ticker: str):
     df = fetch_data(ticker)
     if df is None:
         return None
-    sk, sd     = compute_stochastic(df)
+
+    sk, sd = compute_stochastic(df)
+    if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
+        return None
+
+    r = _base_result(ticker, df, sk, sd)
     sar, trend = compute_psar(df)
-    close      = float(df["Close"].iloc[-1])
-    prev       = float(df["Close"].iloc[-2])
-    sar_val    = float(sar.iloc[-1])
-    return {
-        "ticker":  ticker,
-        "%K":      round(float(sk.iloc[-1]), 2),
-        "%D":      round(float(sd.iloc[-1]), 2),
-        "sar":     round(sar_val, 2),
-        "close":   round(close, 2),
-        "chg":     round((close - prev) / prev * 100, 2),
-        "sar_pct": round((close - sar_val) / sar_val * 100, 2),
-        "sar_bull": int(trend.iloc[-1]) == 1,
-        "crossover": (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1]),
-        "oversold": float(sk.iloc[-1]) < 20,
-        "df":      df,
-        "sk":      sk,
-        "sd":      sd,
-        "sar_s":   sar,
-        "trend":   trend,
-    }
+    return _apply_psar(r, sar, trend)
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 def build_chart(r):
@@ -486,7 +520,7 @@ def build_chart(r):
     sd    = r["sd"]
     sar   = r["sar_s"]
     trend = r["trend"]
-    name  = r["ticker"].replace(".JK", "")
+    name  = r["ticker"]
 
     bull_sar = sar.where(trend ==  1)
     bear_sar = sar.where(trend == -1)
@@ -562,11 +596,32 @@ def build_chart(r):
     return fig
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
+def format_price(value: float) -> str:
+    return f"${value:,.2f}"
+
+
+def format_sar_delta(sar_pct):
+    """Consistent '+x.xx%' / '-x.xx%' / '—' label for the vs-SAR figure."""
+    if sar_pct is None:
+        return "—"
+    sign = "+" if sar_pct >= 0 else ""
+    return f"{sign}{sar_pct}%"
+
+
+def render_indicator_metrics(r: dict):
+    """The Close / Slow%K / Slow%D / vs SAR metric row shared by all three chart views."""
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Close",  format_price(r["close"]), f"{r['chg']:+.2f}%")
+    c2.metric("Slow%K", f"{r['%K']:.1f}")
+    c3.metric("Slow%D", f"{r['%D']:.1f}")
+    c4.metric("vs SAR", format_sar_delta(r.get("sar_pct")))
+
+
 def render_hero(n):
     st.markdown(f"""
     <div class="hero">
-        <div class="hero-eye">IDX · Bursa Efek Indonesia</div>
-        <div class="hero-title">IDX <em>Screener</em></div>
+        <div class="hero-eye">S&amp;P 500 · US Equities</div>
+        <div class="hero-title">S&amp;P 500 <em>Screener</em></div>
         <div class="hero-meta">
             Slow Stoch(10/5/5) · Oversold &lt;20 · Parabolic SAR<br>
             60-day daily · {datetime.now().strftime("%d %b %Y")}
@@ -632,7 +687,7 @@ def render_card(r, idx):
     st.markdown(f"""
     <div class="sig-card" style="border-left-color:{border_color}">
         <div class="sig-top">
-            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
+            <span class="sig-ticker">{r["ticker"]}</span>
             <div class="badges">
                 <span class="badge b-green">✦ Cross</span>
                 {oversold_badge}
@@ -650,7 +705,7 @@ def render_card(r, idx):
             </div>
             <div>
                 <div class="sv-lbl">Close</div>
-                <div class="sv-num">{r["close"]:,}</div>
+                <div class="sv-num">{format_price(r["close"])}</div>
             </div>
             <div>
                 <div class="sv-lbl">vs SAR</div>
@@ -679,13 +734,13 @@ def render_browser_card(r):
     st.markdown(f"""
     <div class="browser-card">
         <div class="sig-top">
-            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
+            <span class="sig-ticker">{r["ticker"]}</span>
             <div class="badges">{badges}</div>
         </div>
         <div class="browser-vals">
             <div>
                 <div class="sv-lbl">Close</div>
-                <div class="sv-num-blue">{r["close"]:,}</div>
+                <div class="sv-num-blue">{format_price(r["close"])}</div>
             </div>
             <div>
                 <div class="sv-lbl">Chg%</div>
@@ -708,7 +763,7 @@ def render_browser_card(r):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    universe = IDX_TICKERS[:]
+    universe = SP500_TICKERS[:]
     render_hero(len(universe))
 
     run = st.button("⚡  Run Screener", use_container_width=True)
@@ -716,7 +771,7 @@ def main():
 
     # ── Scan
     if run:
-        to_scan  = universe[:100]
+        to_scan  = universe[:]
         results  = []
         prog     = st.progress(0, text="Starting…")
         status   = st.empty()
@@ -808,7 +863,7 @@ def main():
 
             for i, r in enumerate(results):
                 render_card(r, i)
-                if st.button(f"View chart →  {r['ticker'].replace('.JK','')}", 
+                if st.button(f"View chart →  {r['ticker']}",
                              key=f"btn_{i}", use_container_width=True):
                     st.session_state["selected"] = i if selected != i else None
                     selected = st.session_state["selected"]
@@ -817,13 +872,7 @@ def main():
                     fig = build_chart(r)
                     st.plotly_chart(fig, use_container_width=True,
                                     config={"displayModeBar": False})
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
-                    c2.metric("Slow%K", f"{r['%K']:.1f}")
-                    c3.metric("Slow%D", f"{r['%D']:.1f}")
-                    sar_delta = (f"+{r['sar_pct']}%" if r.get("sar_pct") is not None and r["sar_pct"] >= 0
-                                 else f"{r['sar_pct']}%" if r.get("sar_pct") is not None else "—")
-                    c4.metric("vs SAR", sar_delta)
+                    render_indicator_metrics(r)
                     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -835,16 +884,14 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # Ticker selector — clean labels (strip .JK), keep value mapping
-    label_to_ticker = {t.replace(".JK", ""): t for t in universe}
-    labels = list(label_to_ticker.keys())
+    labels = universe  # S&P 500 tickers already carry no exchange suffix
 
     col_sel, col_btn = st.columns([3, 1])
     with col_sel:
         chosen_label = st.selectbox(
             "Select ticker",
             options=labels,
-            index=labels.index("ISAT") if "ISAT" in labels else 0,
+            index=labels.index("AAPL") if "AAPL" in labels else 0,
             label_visibility="collapsed",
         )
     with col_btn:
@@ -862,44 +909,28 @@ def main():
         load_multi = st.button("Load selected charts", key="browse_multi_load",
                                use_container_width=True)
 
-    # ── Single ticker chart
-    if load_chart:
-        ticker = label_to_ticker[chosen_label]
+    def render_ticker_chart(ticker: str, missing_is_warning: bool = False):
+        """Shared render path for the single- and multi-ticker chart browser."""
         with st.spinner(f"Fetching {ticker}…"):
             r = get_chart_data(ticker)
         if r is None:
-            st.error(f"Could not load data for {ticker}. Yahoo Finance may be rate-limiting — try again shortly.")
-        else:
-            render_browser_card(r)
-            fig = build_chart(r)
-            st.plotly_chart(fig, use_container_width=True,
-                            config={"displayModeBar": False})
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
-            c2.metric("Slow%K", f"{r['%K']:.1f}")
-            c3.metric("Slow%D", f"{r['%D']:.1f}")
-            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
-            c4.metric("vs SAR", sar_delta)
+            msg = f"No data for {ticker} — skipped." if missing_is_warning else \
+                  f"Could not load data for {ticker}. Yahoo Finance may be rate-limiting — try again shortly."
+            (st.warning if missing_is_warning else st.error)(msg)
+            return
+        render_browser_card(r)
+        fig = build_chart(r)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        render_indicator_metrics(r)
+
+    # ── Single ticker chart
+    if load_chart:
+        render_ticker_chart(chosen_label)
 
     # ── Multi-ticker charts
     if load_multi and multi_labels:
         for lbl in multi_labels:
-            ticker = label_to_ticker[lbl]
-            with st.spinner(f"Fetching {ticker}…"):
-                r = get_chart_data(ticker)
-            if r is None:
-                st.warning(f"No data for {ticker} — skipped.")
-                continue
-            render_browser_card(r)
-            fig = build_chart(r)
-            st.plotly_chart(fig, use_container_width=True,
-                            config={"displayModeBar": False})
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
-            c2.metric("Slow%K", f"{r['%K']:.1f}")
-            c3.metric("Slow%D", f"{r['%D']:.1f}")
-            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
-            c4.metric("vs SAR", sar_delta)
+            render_ticker_chart(lbl, missing_is_warning=True)
             st.markdown("<hr>", unsafe_allow_html=True)
 
 
