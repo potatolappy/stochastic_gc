@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 import time
+import random
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -375,18 +376,39 @@ SP500_TICKERS = list(dict.fromkeys([
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
+def _is_rate_limit_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "429" in msg or "rate limit" in msg or "too many requests" in msg
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_data(ticker: str):
-    try:
-        df = yf.download(ticker, period="60d", interval="1d",
-                         progress=False, auto_adjust=True)
-        if df.empty or len(df) < 30:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        return df
-    except Exception:
-        return None
+def fetch_data(ticker: str, max_retries: int = 3):
+    """
+    Fetch OHLC data for a ticker.
+    Returns (df, error) — df is None on failure, and error is one of
+    None / "rate_limited" / "no_data" / "error" so callers can show a
+    message that actually matches what went wrong.
+    Retries transient/rate-limit failures with exponential backoff + jitter
+    before giving up, so a single hiccup doesn't fail the whole request.
+    """
+    last_error = "error"
+    for attempt in range(max_retries):
+        try:
+            df = yf.download(ticker, period="60d", interval="1d",
+                             progress=False, auto_adjust=True)
+            if df.empty or len(df) < 30:
+                return None, "no_data"
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            return df, None
+        except Exception as e:
+            last_error = "rate_limited" if _is_rate_limit_error(e) else "error"
+            if last_error == "rate_limited" and attempt < max_retries - 1:
+                backoff = (2 ** attempt) * 1.5 + random.uniform(0, 0.75)
+                time.sleep(backoff)
+                continue
+            break
+    return None, last_error
 
 # ── Stochastic Slow ───────────────────────────────────────────────────────────
 def compute_stochastic(df, fast_k=10, slow_k=5, slow_d=5):
@@ -480,7 +502,7 @@ def _apply_psar(r: dict, sar, trend) -> dict:
 # ── Phase 1: Golden Cross only ────────────────────────────────────────────────
 def check_signal(ticker: str):
     """Returns signal for any Slow%K cross above Slow%D. Oversold is data, not a filter."""
-    df = fetch_data(ticker)
+    df, _err = fetch_data(ticker)
     if df is None:
         return None
 
@@ -500,18 +522,21 @@ def enrich_with_psar(r: dict) -> dict:
 
 # ── Get chart data without signal requirement ─────────────────────────────────
 def get_chart_data(ticker: str):
-    """Fetch and compute indicators for any ticker, no signal filter."""
-    df = fetch_data(ticker)
+    """Fetch and compute indicators for any ticker, no signal filter.
+    Returns (result_dict, error) — result_dict is None on failure, error is
+    "rate_limited" / "no_data" / "error" / None so the UI can show a message
+    that matches what actually happened."""
+    df, err = fetch_data(ticker)
     if df is None:
-        return None
+        return None, err
 
     sk, sd = compute_stochastic(df)
     if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
-        return None
+        return None, "no_data"
 
     r = _base_result(ticker, df, sk, sd)
     sar, trend = compute_psar(df)
-    return _apply_psar(r, sar, trend)
+    return _apply_psar(r, sar, trend), None
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 def build_chart(r):
@@ -786,7 +811,7 @@ def main():
             res = check_signal(ticker)
             if res:
                 results.append(res)
-            time.sleep(0.05)
+            time.sleep(0.3 + random.uniform(0, 0.2))
 
         prog.empty(); status.empty()
         st.session_state.update(results=results, scanned=len(to_scan), selected=None, psar_done=False)
@@ -909,13 +934,20 @@ def main():
         load_multi = st.button("Load selected charts", key="browse_multi_load",
                                use_container_width=True)
 
+    def _error_message(ticker: str, err: str) -> str:
+        if err == "rate_limited":
+            return (f"Yahoo Finance is rate-limiting requests right now — {ticker} couldn't load. "
+                     "This clears on its own; try again in a bit, or space out your requests.")
+        if err == "no_data":
+            return f"No usable data returned for {ticker} — check the ticker is still listed / actively traded."
+        return f"Could not load {ticker} — something went wrong fetching or computing its data."
+
     def render_ticker_chart(ticker: str, missing_is_warning: bool = False):
         """Shared render path for the single- and multi-ticker chart browser."""
         with st.spinner(f"Fetching {ticker}…"):
-            r = get_chart_data(ticker)
+            r, err = get_chart_data(ticker)
         if r is None:
-            msg = f"No data for {ticker} — skipped." if missing_is_warning else \
-                  f"Could not load data for {ticker}. Yahoo Finance may be rate-limiting — try again shortly."
+            msg = _error_message(ticker, err)
             (st.warning if missing_is_warning else st.error)(msg)
             return
         render_browser_card(r)
