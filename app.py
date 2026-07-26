@@ -6,11 +6,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 import time
-import random
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="S&P 500 Screener",
+    page_title="S&P500 Screener",
     page_icon="📈",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -308,8 +307,8 @@ hr { border-color: var(--border) !important; margin: 0.9rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Ticker universe: S&P 500 constituents (deduped, dots -> dashes for yfinance) ──
-SP500_TICKERS = list(dict.fromkeys([
+# ── Ticker universe (deduped) ─────────────────────────────────────────────────
+IDX_TICKERS = list(dict.fromkeys([
     "MMM", "AOS", "ABT", "ABBV", "ACN", "ADBE", "AMD", "AES",
     "AFL", "A", "APD", "ABNB", "AKAM", "ALB", "ARE", "ALGN",
     "ALLE", "LNT", "ALL", "GOOGL", "GOOG", "MO", "AMZN", "AMCR",
@@ -376,39 +375,18 @@ SP500_TICKERS = list(dict.fromkeys([
 ]))
 
 # ── Data fetch ────────────────────────────────────────────────────────────────
-def _is_rate_limit_error(exc: Exception) -> bool:
-    msg = str(exc).lower()
-    return "429" in msg or "rate limit" in msg or "too many requests" in msg
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_data(ticker: str, max_retries: int = 3):
-    """
-    Fetch OHLC data for a ticker.
-    Returns (df, error) — df is None on failure, and error is one of
-    None / "rate_limited" / "no_data" / "error" so callers can show a
-    message that actually matches what went wrong.
-    Retries transient/rate-limit failures with exponential backoff + jitter
-    before giving up, so a single hiccup doesn't fail the whole request.
-    """
-    last_error = "error"
-    for attempt in range(max_retries):
-        try:
-            df = yf.download(ticker, period="60d", interval="1d",
-                             progress=False, auto_adjust=True)
-            if df.empty or len(df) < 30:
-                return None, "no_data"
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            return df, None
-        except Exception as e:
-            last_error = "rate_limited" if _is_rate_limit_error(e) else "error"
-            if last_error == "rate_limited" and attempt < max_retries - 1:
-                backoff = (2 ** attempt) * 1.5 + random.uniform(0, 0.75)
-                time.sleep(backoff)
-                continue
-            break
-    return None, last_error
+def fetch_data(ticker: str):
+    try:
+        df = yf.download(ticker, period="60d", interval="1d",
+                         progress=False, auto_adjust=True)
+        if df.empty or len(df) < 30:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df
+    except Exception:
+        return None
 
 # ── Stochastic Slow ───────────────────────────────────────────────────────────
 def compute_stochastic(df, fast_k=10, slow_k=5, slow_d=5):
@@ -462,81 +440,88 @@ def compute_psar(df, af0=0.02, af_step=0.02, af_max=0.2):
     return (pd.Series(sar,   index=df.index),
             pd.Series(trend, index=df.index))
 
-# ── Shared result builders (used by check_signal / enrich_with_psar / get_chart_data) ──
-def _base_result(ticker: str, df, sk, sd) -> dict:
-    """Common Slow-Stoch fields shared by every code path that inspects a ticker."""
-    close = float(df["Close"].iloc[-1])
-    prev  = float(df["Close"].iloc[-2])
-    return {
-        "ticker":    ticker,
-        "%K":        round(float(sk.iloc[-1]), 2),
-        "%D":        round(float(sd.iloc[-1]), 2),
-        "close":     round(close, 2),
-        "chg":       round((close - prev) / prev * 100, 2),
-        "oversold":  float(sk.iloc[-1]) < 20,   # informational
-        "crossover": bool((sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])),
-        # PSAR fields — filled in by _apply_psar, None until then
-        "sar":       None,
-        "sar_pct":   None,
-        "sar_bull":  None,
-        "sar_s":     None,
-        "trend":     None,
-        "df":        df,
-        "sk":        sk,
-        "sd":        sd,
-    }
-
-
-def _apply_psar(r: dict, sar, trend) -> dict:
-    """Fill in a result dict's PSAR fields in place."""
-    r["sar_s"] = sar
-    r["trend"] = trend
-    if not sar.isna().iloc[-1]:
-        sar_val       = float(sar.iloc[-1])
-        r["sar"]      = round(sar_val, 2)
-        r["sar_pct"]  = round((r["close"] - sar_val) / sar_val * 100, 2)
-        r["sar_bull"] = int(trend.iloc[-1]) == 1
-    return r
-
-
 # ── Phase 1: Golden Cross only ────────────────────────────────────────────────
 def check_signal(ticker: str):
     """Returns signal for any Slow%K cross above Slow%D. Oversold is data, not a filter."""
-    df, _err = fetch_data(ticker)
+    df = fetch_data(ticker)
     if df is None:
         return None
 
     sk, sd = compute_stochastic(df)
+
     if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
         return None
 
-    r = _base_result(ticker, df, sk, sd)
-    return r if r["crossover"] else None
+    crossover = (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1])
 
+    if crossover:
+        close = float(df["Close"].iloc[-1])
+        prev  = float(df["Close"].iloc[-2])
+        return {
+            "ticker":   ticker,
+            "%K":       round(float(sk.iloc[-1]), 2),
+            "%D":       round(float(sd.iloc[-1]), 2),
+            "close":    round(close, 2),
+            "chg":      round((close - prev) / prev * 100, 2),
+            "oversold": float(sk.iloc[-1]) < 20,   # informational
+            # PSAR fields filled in phase 2
+            "sar":      None,
+            "sar_pct":  None,
+            "sar_bull": None,
+            "sar_s":    None,
+            "trend":    None,
+            "df":       df,
+            "sk":       sk,
+            "sd":       sd,
+        }
+    return None
 
 # ── Phase 2: Enrich result with PSAR ─────────────────────────────────────────
 def enrich_with_psar(r: dict) -> dict:
-    sar, trend = compute_psar(r["df"])
-    return _apply_psar(r, sar, trend)
+    df = r["df"]
+    sar, trend = compute_psar(df)
 
+    if sar.isna().iloc[-1]:
+        r["sar_s"] = sar
+        r["trend"] = trend
+        return r
+
+    sar_val      = float(sar.iloc[-1])
+    r["sar"]     = round(sar_val, 2)
+    r["sar_pct"] = round((r["close"] - sar_val) / sar_val * 100, 2)
+    r["sar_bull"]= int(trend.iloc[-1]) == 1
+    r["sar_s"]   = sar
+    r["trend"]   = trend
+    return r
 
 # ── Get chart data without signal requirement ─────────────────────────────────
 def get_chart_data(ticker: str):
-    """Fetch and compute indicators for any ticker, no signal filter.
-    Returns (result_dict, error) — result_dict is None on failure, error is
-    "rate_limited" / "no_data" / "error" / None so the UI can show a message
-    that matches what actually happened."""
-    df, err = fetch_data(ticker)
+    """Fetch and compute indicators for any ticker, no signal filter."""
+    df = fetch_data(ticker)
     if df is None:
-        return None, err
-
-    sk, sd = compute_stochastic(df)
-    if sk.isna().iloc[-1] or sd.isna().iloc[-1]:
-        return None, "no_data"
-
-    r = _base_result(ticker, df, sk, sd)
+        return None
+    sk, sd     = compute_stochastic(df)
     sar, trend = compute_psar(df)
-    return _apply_psar(r, sar, trend), None
+    close      = float(df["Close"].iloc[-1])
+    prev       = float(df["Close"].iloc[-2])
+    sar_val    = float(sar.iloc[-1])
+    return {
+        "ticker":  ticker,
+        "%K":      round(float(sk.iloc[-1]), 2),
+        "%D":      round(float(sd.iloc[-1]), 2),
+        "sar":     round(sar_val, 2),
+        "close":   round(close, 2),
+        "chg":     round((close - prev) / prev * 100, 2),
+        "sar_pct": round((close - sar_val) / sar_val * 100, 2),
+        "sar_bull": int(trend.iloc[-1]) == 1,
+        "crossover": (sk.iloc[-2] < sd.iloc[-2]) and (sk.iloc[-1] > sd.iloc[-1]),
+        "oversold": float(sk.iloc[-1]) < 20,
+        "df":      df,
+        "sk":      sk,
+        "sd":      sd,
+        "sar_s":   sar,
+        "trend":   trend,
+    }
 
 # ── Chart ─────────────────────────────────────────────────────────────────────
 def build_chart(r):
@@ -545,7 +530,7 @@ def build_chart(r):
     sd    = r["sd"]
     sar   = r["sar_s"]
     trend = r["trend"]
-    name  = r["ticker"]
+    name  = r["ticker"].replace(".JK", "")
 
     bull_sar = sar.where(trend ==  1)
     bear_sar = sar.where(trend == -1)
@@ -621,32 +606,11 @@ def build_chart(r):
     return fig
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
-def format_price(value: float) -> str:
-    return f"${value:,.2f}"
-
-
-def format_sar_delta(sar_pct):
-    """Consistent '+x.xx%' / '-x.xx%' / '—' label for the vs-SAR figure."""
-    if sar_pct is None:
-        return "—"
-    sign = "+" if sar_pct >= 0 else ""
-    return f"{sign}{sar_pct}%"
-
-
-def render_indicator_metrics(r: dict):
-    """The Close / Slow%K / Slow%D / vs SAR metric row shared by all three chart views."""
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Close",  format_price(r["close"]), f"{r['chg']:+.2f}%")
-    c2.metric("Slow%K", f"{r['%K']:.1f}")
-    c3.metric("Slow%D", f"{r['%D']:.1f}")
-    c4.metric("vs SAR", format_sar_delta(r.get("sar_pct")))
-
-
 def render_hero(n):
     st.markdown(f"""
     <div class="hero">
-        <div class="hero-eye">S&amp;P 500 · US Equities</div>
-        <div class="hero-title">S&amp;P 500 <em>Screener</em></div>
+        <div class="hero-eye">IDX · Bursa Efek Indonesia</div>
+        <div class="hero-title">IDX <em>Screener</em></div>
         <div class="hero-meta">
             Slow Stoch(10/5/5) · Oversold &lt;20 · Parabolic SAR<br>
             60-day daily · {datetime.now().strftime("%d %b %Y")}
@@ -712,7 +676,7 @@ def render_card(r, idx):
     st.markdown(f"""
     <div class="sig-card" style="border-left-color:{border_color}">
         <div class="sig-top">
-            <span class="sig-ticker">{r["ticker"]}</span>
+            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
             <div class="badges">
                 <span class="badge b-green">✦ Cross</span>
                 {oversold_badge}
@@ -730,7 +694,7 @@ def render_card(r, idx):
             </div>
             <div>
                 <div class="sv-lbl">Close</div>
-                <div class="sv-num">{format_price(r["close"])}</div>
+                <div class="sv-num">{r["close"]:,}</div>
             </div>
             <div>
                 <div class="sv-lbl">vs SAR</div>
@@ -759,13 +723,13 @@ def render_browser_card(r):
     st.markdown(f"""
     <div class="browser-card">
         <div class="sig-top">
-            <span class="sig-ticker">{r["ticker"]}</span>
+            <span class="sig-ticker">{r["ticker"].replace(".JK","")}</span>
             <div class="badges">{badges}</div>
         </div>
         <div class="browser-vals">
             <div>
                 <div class="sv-lbl">Close</div>
-                <div class="sv-num-blue">{format_price(r["close"])}</div>
+                <div class="sv-num-blue">{r["close"]:,}</div>
             </div>
             <div>
                 <div class="sv-lbl">Chg%</div>
@@ -788,7 +752,7 @@ def render_browser_card(r):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    universe = SP500_TICKERS[:]
+    universe = IDX_TICKERS[:]
     render_hero(len(universe))
 
     run = st.button("⚡  Run Screener", use_container_width=True)
@@ -796,7 +760,7 @@ def main():
 
     # ── Scan
     if run:
-        to_scan  = universe[:]
+        to_scan  = universe[:100]
         results  = []
         prog     = st.progress(0, text="Starting…")
         status   = st.empty()
@@ -811,7 +775,7 @@ def main():
             res = check_signal(ticker)
             if res:
                 results.append(res)
-            time.sleep(0.3 + random.uniform(0, 0.2))
+            time.sleep(0.05)
 
         prog.empty(); status.empty()
         st.session_state.update(results=results, scanned=len(to_scan), selected=None, psar_done=False)
@@ -888,7 +852,7 @@ def main():
 
             for i, r in enumerate(results):
                 render_card(r, i)
-                if st.button(f"View chart →  {r['ticker']}",
+                if st.button(f"View chart →  {r['ticker'].replace('.JK','')}", 
                              key=f"btn_{i}", use_container_width=True):
                     st.session_state["selected"] = i if selected != i else None
                     selected = st.session_state["selected"]
@@ -897,7 +861,13 @@ def main():
                     fig = build_chart(r)
                     st.plotly_chart(fig, use_container_width=True,
                                     config={"displayModeBar": False})
-                    render_indicator_metrics(r)
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+                    c2.metric("Slow%K", f"{r['%K']:.1f}")
+                    c3.metric("Slow%D", f"{r['%D']:.1f}")
+                    sar_delta = (f"+{r['sar_pct']}%" if r.get("sar_pct") is not None and r["sar_pct"] >= 0
+                                 else f"{r['sar_pct']}%" if r.get("sar_pct") is not None else "—")
+                    c4.metric("vs SAR", sar_delta)
                     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ════════════════════════════════════════════════════════════════════════
@@ -909,14 +879,16 @@ def main():
         unsafe_allow_html=True,
     )
 
-    labels = universe  # S&P 500 tickers already carry no exchange suffix
+    # Ticker selector — clean labels (strip .JK), keep value mapping
+    label_to_ticker = {t.replace(".JK", ""): t for t in universe}
+    labels = list(label_to_ticker.keys())
 
     col_sel, col_btn = st.columns([3, 1])
     with col_sel:
         chosen_label = st.selectbox(
             "Select ticker",
             options=labels,
-            index=labels.index("AAPL") if "AAPL" in labels else 0,
+            index=labels.index("ISAT") if "ISAT" in labels else 0,
             label_visibility="collapsed",
         )
     with col_btn:
@@ -934,35 +906,44 @@ def main():
         load_multi = st.button("Load selected charts", key="browse_multi_load",
                                use_container_width=True)
 
-    def _error_message(ticker: str, err: str) -> str:
-        if err == "rate_limited":
-            return (f"Yahoo Finance is rate-limiting requests right now — {ticker} couldn't load. "
-                     "This clears on its own; try again in a bit, or space out your requests.")
-        if err == "no_data":
-            return f"No usable data returned for {ticker} — check the ticker is still listed / actively traded."
-        return f"Could not load {ticker} — something went wrong fetching or computing its data."
-
-    def render_ticker_chart(ticker: str, missing_is_warning: bool = False):
-        """Shared render path for the single- and multi-ticker chart browser."""
-        with st.spinner(f"Fetching {ticker}…"):
-            r, err = get_chart_data(ticker)
-        if r is None:
-            msg = _error_message(ticker, err)
-            (st.warning if missing_is_warning else st.error)(msg)
-            return
-        render_browser_card(r)
-        fig = build_chart(r)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        render_indicator_metrics(r)
-
     # ── Single ticker chart
     if load_chart:
-        render_ticker_chart(chosen_label)
+        ticker = label_to_ticker[chosen_label]
+        with st.spinner(f"Fetching {ticker}…"):
+            r = get_chart_data(ticker)
+        if r is None:
+            st.error(f"Could not load data for {ticker}. Yahoo Finance may be rate-limiting — try again shortly.")
+        else:
+            render_browser_card(r)
+            fig = build_chart(r)
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+            c2.metric("Slow%K", f"{r['%K']:.1f}")
+            c3.metric("Slow%D", f"{r['%D']:.1f}")
+            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
+            c4.metric("vs SAR", sar_delta)
 
     # ── Multi-ticker charts
     if load_multi and multi_labels:
         for lbl in multi_labels:
-            render_ticker_chart(lbl, missing_is_warning=True)
+            ticker = label_to_ticker[lbl]
+            with st.spinner(f"Fetching {ticker}…"):
+                r = get_chart_data(ticker)
+            if r is None:
+                st.warning(f"No data for {ticker} — skipped.")
+                continue
+            render_browser_card(r)
+            fig = build_chart(r)
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Close",  f"Rp {r['close']:,}", f"{r['chg']:+.2f}%")
+            c2.metric("Slow%K", f"{r['%K']:.1f}")
+            c3.metric("Slow%D", f"{r['%D']:.1f}")
+            sar_delta = f"+{r['sar_pct']}%" if r["sar_pct"] >= 0 else f"{r['sar_pct']}%"
+            c4.metric("vs SAR", sar_delta)
             st.markdown("<hr>", unsafe_allow_html=True)
 
 
